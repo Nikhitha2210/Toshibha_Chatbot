@@ -39,7 +39,7 @@ const LoginScreen = () => {
           <View style={styles.wrapper}>
             <View style={styles.logoWrapper}>
               <Image
-                source={require('../../assets/images/download.png')}
+                source={require('../../assets/images/elevaite.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
