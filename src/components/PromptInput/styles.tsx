@@ -4,14 +4,14 @@ import Colors from "../../theme/colors";
 
 export const styles = StyleSheet.create({
     askSection: {
-        marginTop: 20,
-        width: '90%',
-        padding: 10,
-        borderTopWidth: 1,
-        borderColor: '#333'
+        width: '100%',
+        backgroundColor: Colors.dark.background,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        borderRadius: 10
     },
     askText: {
-        color: Colors.dark.text,
+        color: Colors.dark.subText,
         marginBottom: 8,
         fontSize: 13
     },
@@ -22,18 +22,19 @@ export const styles = StyleSheet.create({
     },
     askButton: {
         backgroundColor: Colors.dark.background2,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 5,
-        marginRight: 10,
+        paddingVertical: 5,
+        paddingHorizontal: 15,
+        borderRadius: 10,
+        marginRight: 8,
         borderWidth: 1,
-        borderColor: '#444'
+        borderColor: Colors.dark.stroke
     },
     btnText: {
-        color: 'white'
+        color: Colors.dark.subText,
+        fontSize: 12
     },
     micIcon: {
-        width: 24,
-        height: 24
+        width: 22,
+        height: 22
     }
 })

@@ -1,14 +1,15 @@
 import React from 'react'
 
-import { Dimensions, Text, TouchableOpacity, View } from 'react-native'
+import { Dimensions, Image, Text, TouchableOpacity, View } from 'react-native'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import styles from "./HomeScreen.Styles";
+import styles from './HomeScreen.Styles';
 import Header from '../../components/header';
 import PromptInput from '../../components/PromptInput';
 import PromptCards from '../../components/PromptCards';
 import RecentQueries from '../../components/RecentQueries';
+import SearchComponent from '../../components/Search';
 
 const HomeScreen = () => {
 
@@ -19,7 +20,7 @@ const HomeScreen = () => {
     const panContext = { startX: 0, value: 0 };
 
     const openMenu = () => {
-        gestureHandlerWidth.value = withTiming(width - 70);
+        gestureHandlerWidth.value = withTiming(width - 90);
     };
 
     const closeMenu = () => {
@@ -38,7 +39,7 @@ const HomeScreen = () => {
         })
         .onUpdate((e) => {
             const value = panContext.startX + e.translationX;
-            if (value <= width - 70 && value > 0) {
+            if (value <= width - 90 && value > 0) {
                 gestureHandlerWidth.value = value;
                 panContext.value = value;
             }
@@ -50,7 +51,7 @@ const HomeScreen = () => {
             if (e.translationX < -30) {
                 gestureHandlerWidth.value = withTiming(0, { duration: 500 });
             } else if (draggedDistance > threshold) {
-                gestureHandlerWidth.value = withTiming(width - 70, { duration: 500 });
+                gestureHandlerWidth.value = withTiming(width - 90, { duration: 500 });
             } else {
                 gestureHandlerWidth.value = withTiming(0, { duration: 500 });
             }
@@ -87,10 +88,56 @@ const HomeScreen = () => {
         <GestureDetector gesture={panGesture}>
             <Animated.View style={[styles.container, mainAnimatedStyle]}>
 
+                {/* Navigation Container */}
                 <View style={styles.navigationWrapper}>
-                    <TouchableOpacity onPress={closeMenu} style={styles.closeButton}>
-                        <Text style={styles.btnText}>Close Menu</Text>
-                    </TouchableOpacity>
+                    <View style={styles.navigationContentWrapper}>
+                        <SearchComponent />
+                        <TouchableOpacity style={{ alignItems: 'center' }}>
+                            <Text style={styles.advanceSearchText}>Advanced Search</Text>
+                        </TouchableOpacity>
+                        <View style={styles.divider} />
+                        <TouchableOpacity style={styles.navigationProjects}>
+                            <Image source={require('../../assets/images/folder.png')} style={styles.navigationProjectsIcon} />
+                            <Text style={styles.navigationProjectsText}>Projects</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.navigationExploreQueries}>
+                            <Image source={require('../../assets/images/star.png')} style={styles.navigationExploreQueriesIcon} />
+                            <Text style={styles.navigationExploreQueriesText}>Explore Queries</Text>
+                        </TouchableOpacity>
+                        <View style={styles.divider} />
+                        <View style={styles.myQueriesWrapper}>
+                            <Text style={styles.myQuerieText}>My Queries</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={styles.myQueryToogleWrapper}>
+                                    <View style={styles.myQueryToogleButton} />
+                                </View>
+                                <Image source={require('../../assets/images/filter.png')} style={styles.myQueriesIcon} />
+                            </View>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {[
+                                { title: 'Today', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
+                                { title: 'Past week', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
+                                { title: 'Older', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
+                            ].map(section => (
+                                <View key={section.title} style={styles.recentQueriesWrapper}>
+                                    <Text style={styles.recentQueryTitle}>{section.title}</Text>
+                                    {section.items.map((item, index) => (
+                                        <Text key={index} style={styles.recentQueryText}>
+                                            <Text style={styles.recentQueryIcon}>• </Text>{item}
+                                        </Text>
+                                    ))}
+                                </View>
+                            ))}
+                        </View>
+                        <TouchableOpacity style={styles.settingWrapper}>
+                            <Image
+                                source={require('../../assets/images/settings.png')}
+                                style={styles.settingIcon}
+                            />
+                            <Text style={styles.settingsText}>Settings</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Main Container */}
@@ -106,6 +153,8 @@ const HomeScreen = () => {
                                     <PromptCards />
                                     <RecentQueries />
                                 </View>
+                            </View>
+                            <View style={styles.inputContainer}>
                                 <PromptInput />
                             </View>
                         </View>
@@ -113,7 +162,7 @@ const HomeScreen = () => {
                 </GestureDetector>
 
             </Animated.View>
-        </GestureDetector>
+        </GestureDetector >
     )
 }
 

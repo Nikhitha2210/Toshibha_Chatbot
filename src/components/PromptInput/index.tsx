@@ -10,8 +10,11 @@ const PromptInput = () => {
         <View style={styles.askSection}>
             <Text style={styles.askText}>Ask Anything</Text>
             <View style={styles.askInputContainer}>
-                <TouchableOpacity style={styles.askButton}><Text style={styles.btnText}>Search</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.askButton}><Text style={styles.btnText}>Deep Search</Text></TouchableOpacity>
+                <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity style={styles.askButton}><Image source={require('../../assets/images/file.png')} /></TouchableOpacity>
+                    <TouchableOpacity style={styles.askButton}><Text style={styles.btnText}>Search</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.askButton}><Text style={styles.btnText}>Deep Search</Text></TouchableOpacity>
+                </View>
                 <Image source={require('../../assets/images/mic.png')} style={styles.micIcon} />
             </View>
         </View>
