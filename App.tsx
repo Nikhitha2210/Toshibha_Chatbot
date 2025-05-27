@@ -8,7 +8,6 @@ import Navigation from './src/navigation';
 const App = () => {
   return (
     <>
-      {/* <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" /> */}
       <GestureHandlerRootView style={styles.rootView}>
         <Navigation />
       </GestureHandlerRootView>

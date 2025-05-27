@@ -2,6 +2,8 @@ import React from 'react';
 
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 
+import IconAssets from '../../assets/icons/IconAssets';
+
 type HeaderTypes = {
     onMenuPress: () => void
 }
@@ -10,16 +12,9 @@ const Header = (props: HeaderTypes) => {
     return (
         <View style={styles.container}>
             <TouchableOpacity onPress={props?.onMenuPress}>
-                <Image
-                    source={require('../../assets/images/menu.png')}
-                    style={styles.icon}
-                />
+                <IconAssets.Menu style={styles.icon} />
             </TouchableOpacity>
-
-            <Image
-                source={require('../../assets/images/elevaite.png')}
-                style={styles.logo}
-            />
+            <IconAssets.Logo style={styles.logo} />
         </View>
     );
 };
@@ -30,7 +25,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: 20,
+        paddingTop: 25,
     },
     icon: {
         height: 25,

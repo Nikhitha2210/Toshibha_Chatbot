@@ -12,7 +12,6 @@ export const styles = StyleSheet.create({
     },
     askText: {
         color: Colors.dark.subText,
-        marginBottom: 8,
         fontSize: 13
     },
     askInputContainer: {
@@ -25,7 +24,7 @@ export const styles = StyleSheet.create({
         paddingVertical: 5,
         paddingHorizontal: 15,
         borderRadius: 10,
-        marginRight: 8,
+        marginRight: 3,
         borderWidth: 1,
         borderColor: Colors.dark.stroke
     },
@@ -36,5 +35,17 @@ export const styles = StyleSheet.create({
     micIcon: {
         width: 22,
         height: 22
+    },
+    dotsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#333',
+        marginHorizontal: 2,
     }
 })

@@ -18,12 +18,12 @@ const styles = StyleSheet.create({
     },
     logoWrapper: {
         position: 'absolute',
-        top: 20,
-        right: 24,
+        top: 50,
+        right: 10,
     },
     logo: {
+        height: 50,
         width: 120,
-        height: 60,
     },
     mainWrapper: {
         justifyContent: 'center',

@@ -4,10 +4,12 @@ import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, Text
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { FAIcon, MIIcon } from '../../assets/icons/Icons';
-import Colors from '../../theme/colors';
-
 import styles from './LoginScreen.styles';
+
+import Colors from '../../theme/colors';
+import GoogleLogo from '../../assets/images/google.png'
+
+import IconAssets from '../../assets/icons/IconAssets';
 
 type RootStackParamList = {
   Login: undefined;
@@ -38,11 +40,7 @@ const LoginScreen = () => {
         >
           <View style={styles.wrapper}>
             <View style={styles.logoWrapper}>
-              <Image
-                source={require('../../assets/images/elevaite.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+              <IconAssets.Logo style={styles.logo} />
             </View>
 
             <View style={styles.mainWrapper}>
@@ -52,7 +50,7 @@ const LoginScreen = () => {
               </View>
 
               <View style={styles.inputWrapper}>
-                <FAIcon name="envelope" size={20} color={Colors.dark.subText} style={styles.inputIcon} />
+                <IconAssets.Mail style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
@@ -62,7 +60,7 @@ const LoginScreen = () => {
               </View>
 
               <View style={styles.inputWrapper}>
-                <MIIcon name="lock" size={20} color={Colors.dark.subText} style={styles.inputIcon} />
+                <IconAssets.Lock style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Password"
@@ -83,7 +81,7 @@ const LoginScreen = () => {
 
               <TouchableOpacity style={styles.googleButton}>
                 <Image
-                  source={require('../../assets/images/google.png')}
+                  source={GoogleLogo}
                   style={styles.googleIcon}
                 />
                 <Text style={styles.googleButtonText}>Sign in with Google</Text>

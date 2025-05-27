@@ -27,6 +27,10 @@ const styles = StyleSheet.create({
         width: '85%',
         fontSize: 15,
     },
+    clearIcon: {
+        width: 18,
+        height: 18,
+    },
     pencilIconWrapper: {
         width: 20,
         height: 20,

@@ -85,6 +85,23 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    // ADD THIS SECTION TO FIX DEPENDENCY CONFLICTS
+    configurations.all {
+        resolutionStrategy {
+            // Force AndroidX versions to resolve conflicts
+            force 'androidx.core:core:1.13.1'
+            force 'androidx.versionedparcelable:versionedparcelable:1.1.1'
+            
+            // Exclude old support libraries
+            eachDependency { details ->
+                if (details.requested.group == 'com.android.support') {
+                    details.useTarget group: 'androidx.legacy', name: 'legacy-support-v4', version: '1.0.0'
+                }
+            }
+        }
+    }
+    
     signingConfigs {
         qa {
             storeFile file(APK_UPLOAD_STORE_FILE)
@@ -122,6 +139,10 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // Force AndroidX dependencies to avoid conflicts
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.versionedparcelable:versionedparcelable:1.1.1'
+    
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

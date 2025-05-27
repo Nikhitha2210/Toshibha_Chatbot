@@ -32,7 +32,6 @@ const styles = StyleSheet.create({
     centerContainer: {
         flex: 1,
         alignItems: 'center',
-        marginTop: 90,
     },
     headerText: {
         fontSize: 18,
@@ -59,17 +58,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20
     },
     navigationWrapper: {
+        alignItems: 'center',
+        justifyContent: 'flex-start',
         width: Dimensions.get('screen').width,
         height: '100%',
         backgroundColor: Colors.dark.background2,
-        alignItems: 'center',
-        justifyContent: 'flex-start'
     },
     navigationContentWrapper: {
         flex: 1,
         marginLeft: 90,
         paddingTop: 40,
-        paddingBottom: 20
+        paddingBottom: 20,
     },
     advanceSearchText: {
         color: '#FF6A00',

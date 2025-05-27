@@ -22,8 +22,8 @@ export const styles = StyleSheet.create({
         position: 'relative',
     },
     cardIcon: {
-        width: 20,
-        height: 20,
+        width: 25,
+        height: 25,
         marginBottom: 8
     },
     cardTitle: {
