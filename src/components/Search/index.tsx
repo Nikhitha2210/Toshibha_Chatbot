@@ -44,7 +44,7 @@ const SearchComponent = ({
                 )}
             </View>
             <TouchableOpacity onPress={() => { }} style={styles.pencilIconWrapper}>
-                <IconAssets.Microphone />
+                <IconAssets.NewChat />
             </TouchableOpacity>
         </View>
     );

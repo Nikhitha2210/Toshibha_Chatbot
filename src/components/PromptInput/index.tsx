@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
-import { Image, PermissionsAndroid, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, PermissionsAndroid, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Voice from '@react-native-voice/voice';
 
 import { styles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
+import ListeningDots from '../ListeningDots';
 
 type RootStackParamList = {
     Login: undefined;
@@ -19,6 +20,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const PromptInput = () => {
     const [inputText, setInputText] = useState('');
     const [isListening, setIsListening] = useState(false);
+    const [speechTimeout, setSpeechTimeout] = useState<NodeJS.Timeout | null>(null);
 
     const navigation = useNavigation<NavigationProp>();
 
@@ -65,20 +67,60 @@ const PromptInput = () => {
     }
 
     const onSpeechEnd = () => {
+        if (speechTimeout) {
+            clearTimeout(speechTimeout);
+            setSpeechTimeout(null);
+        }
+
         setIsListening(false);
         console.log('Recording ended');
     }
 
     const onSpeechResults = (event: { value?: string[] }) => {
+
         console.log('OnSpeechResults', event);
+
+        if (speechTimeout) {
+            clearTimeout(speechTimeout);
+            setSpeechTimeout(null);
+        }
+
         const text = event.value && event.value[0] ? event.value[0] : '';
         setInputText(text);
     };
 
     const startListening = async () => {
         try {
+            if (Platform.OS === 'android') {
+                const permission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+                if (!permission) {
+                    const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+                    if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                        Alert.alert(
+                            'Microphone Permission Required',
+                            'Please enable microphone permission in settings to use voice input.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                            ]
+                        );
+                        return;
+                    }
+                }
+            }
+
             await Voice.start('en-US');
             setIsListening(true);
+
+            if (speechTimeout) clearTimeout(speechTimeout);
+
+            const timeout = setTimeout(() => {
+                stopListening();
+                Alert.alert('No input detected', 'Please speak into the microphone.');
+            }, 10000);
+
+            setSpeechTimeout(timeout);
+
         } catch (error) {
             console.log('Start Listening Error', error);
         }
@@ -88,6 +130,12 @@ const PromptInput = () => {
         try {
             await Voice.stop();
             setIsListening(false);
+
+            if (speechTimeout) {
+                clearTimeout(speechTimeout);
+                setSpeechTimeout(null);
+            }
+
         } catch (error) {
             console.log('Stop Listening Error', error);
         }
@@ -115,16 +163,12 @@ const PromptInput = () => {
                         <Text style={styles.btnText}>Deep Search</Text>
                     </TouchableOpacity>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                     <TouchableOpacity onPress={() => {
                         isListening ? stopListening() : startListening();
                     }}>
                         {isListening ? (
-                            <View style={styles.dotsContainer}>
-                                <View style={styles.dot} />
-                                <View style={styles.dot} />
-                                <View style={styles.dot} />
-                            </View>
+                            <ListeningDots />
                         ) : (
                             <IconAssets.Microphone />
                         )}

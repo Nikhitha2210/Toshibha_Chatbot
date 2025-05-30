@@ -30,6 +30,9 @@ const MessageCard: React.FC<MessageCardProps> = ({ time, message, highlight }) =
     const [untrue, setUntrue] = useState(false);
     const [unhelpful, setUnhelpful] = useState(false);
 
+    const [liked, setLiked] = useState(false);
+    const [disliked, setDisliked] = useState(false);
+
     const sourceLinks = [
         {
             id: 1,
@@ -160,8 +163,27 @@ const MessageCard: React.FC<MessageCardProps> = ({ time, message, highlight }) =
                 </TouchableOpacity>
 
                 <View style={styles.actionIcons}>
-                    <IconAssets.ThumbsUp />
-                    <IconAssets.ThumbsDown onPress={() => setFeedbackVisible(true)} />
+                    {liked ? (
+                        <IconAssets.ThumbsUpBold onPress={() => {
+                            setLiked(false);
+                        }} />
+                    ) : (
+                        <IconAssets.ThumbsUp onPress={() => {
+                            setLiked(true);
+                            setDisliked(false);
+                        }} />
+                    )}
+                    {disliked ? (
+                        <IconAssets.ThumbsDownBold onPress={() => {
+                            setDisliked(false);
+                        }} />
+                    ) : (
+                        <IconAssets.ThumbsDown onPress={() => {
+                            setDisliked(true);
+                            setLiked(false);
+                            setFeedbackVisible(true);
+                        }} />
+                    )}
                     <IconAssets.Flag />
                     <IconAssets.Copy />
                     <IconAssets.Refresh />

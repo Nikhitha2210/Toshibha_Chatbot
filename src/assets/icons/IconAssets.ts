@@ -21,6 +21,9 @@ import Refresh from './Refresh.svg'
 import Send from './Send.svg'
 import Arrow from './Arrow.svg'
 import Folder from './Folder.svg'
+import ThumbsUpBold from './thumbs-up-bold.svg'
+import ThumbsDownBold from './thumbs-down-bold.svg'
+import NewChat from './Newchat.svg'
 
 export default {
     Logo,
@@ -45,5 +48,8 @@ export default {
     Refresh,
     Send,
     Arrow,
-    Folder
+    Folder,
+    ThumbsUpBold,
+    ThumbsDownBold,
+    NewChat
 };
