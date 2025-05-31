@@ -151,14 +151,17 @@ const HomeScreen = () => {
                         <View style={styles.mainContent} >
                             <Header onMenuPress={openMenu} />
 
-                            <View style={styles.centerContainer}>
-                                <Text style={styles.headerText}>What can I help with?</Text>
-                                <Text style={styles.headerSubText}>Use one of most common prompts{'\n'}below to begin</Text>
-                                <View style={styles.queriesContainer}>
-                                    <PromptCards />
-                                    <RecentQueries />
+                            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+                                <View style={styles.centerContainer}>
+                                    <Text style={styles.headerText}>What can I help with?</Text>
+                                    <Text style={styles.headerSubText}>Use one of most common prompts{'\n'}below to begin</Text>
+                                    <View style={styles.queriesContainer}>
+                                        <PromptCards />
+                                        <RecentQueries />
+                                    </View>
                                 </View>
-                            </View>
+                            </ScrollView>
+
                             <View style={styles.inputContainer}>
                                 <PromptInput />
                             </View>

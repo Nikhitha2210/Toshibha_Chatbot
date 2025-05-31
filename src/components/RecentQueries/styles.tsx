@@ -4,8 +4,8 @@ import Colors from "../../theme/colors";
 
 export const styles = StyleSheet.create({
     recentQueriesContainer: {
-        marginTop: 30,
-        width: '90%',
+        marginTop: 20,
+        width: '100%',
     },
     recentQueriesHeader: {
         flexDirection: 'row',
@@ -14,16 +14,16 @@ export const styles = StyleSheet.create({
         marginBottom: 10
     },
     recentTitle: {
-        color: Colors.dark.text,
+        color: Colors.dark.subText,
         fontWeight: 'bold',
         fontSize: 14
     },
     seeAllText: {
         color: Colors.dark.subText,
-        fontSize: 12
+        fontSize: 13
     },
     recentCard: {
-        backgroundColor: Colors.dark.background2,
+        backgroundColor: Colors.dark.background3,
         borderRadius: 10,
         padding: 10,
         marginBottom: 10,

@@ -1,17 +1,19 @@
 import React from 'react';
 
-import { StatusBar, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { PromptProvider } from './src/context/PromptContext';
 
 import Navigation from './src/navigation';
 
 const App = () => {
   return (
-    <>
+    <PromptProvider>
       <GestureHandlerRootView style={styles.rootView}>
         <Navigation />
       </GestureHandlerRootView>
-    </>
+    </PromptProvider>
   );
 };
 

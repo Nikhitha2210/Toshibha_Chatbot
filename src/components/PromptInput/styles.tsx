@@ -11,7 +11,7 @@ export const styles = StyleSheet.create({
         borderRadius: 10
     },
     askText: {
-        color: Colors.dark.subText,
+        color: Colors.dark.text,
         fontSize: 13
     },
     askInputContainer: {

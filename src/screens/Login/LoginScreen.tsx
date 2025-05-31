@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -19,10 +19,37 @@ type RootStackParamList = {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const LoginScreen = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+
   const navigation = useNavigation<NavigationProp>();
 
   const handleSignIn = () => {
-    navigation.navigate('Home');
+
+    let isValid = true;
+
+    if (!email) {
+      setEmailError(true);
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError(true);
+      isValid = false
+    } else {
+      setEmailError(false);
+    }
+
+    if (!password) {
+      setPasswordError(true);
+      isValid = false;
+    } else {
+      setPasswordError(false);
+    }
+
+    if (!isValid) return;
+
+    navigation.navigate("Home");
   };
 
   return (
@@ -49,23 +76,33 @@ const LoginScreen = () => {
                 <Text style={styles.subtitle}>Enter your login details below.</Text>
               </View>
 
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, emailError && { borderColor: 'red', borderWidth: 1 }]}>
                 <IconAssets.Mail style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
                   placeholderTextColor={Colors.dark.subText}
                   keyboardType="email-address"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setEmailError(false);
+                  }}
                 />
               </View>
 
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>
                 <IconAssets.Lock style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Password"
                   placeholderTextColor={Colors.dark.subText}
                   secureTextEntry
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError(false);
+                  }}
                 />
               </View>
 
