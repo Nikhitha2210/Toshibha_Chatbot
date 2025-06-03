@@ -1,8 +1,11 @@
-import { Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+
+import { Alert, Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { useChat } from '../../context/ChatContext';
 
 import { styles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
@@ -24,17 +27,36 @@ export type PromptType = {
 type RootStackParamList = {
     Login: undefined;
     Home: undefined;
-    AiAssist: { promptData: PromptType };
+    AiAssist: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const PromptInput = () => {
+const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
     const navigation = useNavigation<NavigationProp>();
 
-    const { inputText, setInputText, isListening, handleVoiceToggle } = useVoiceInput();
+    const { inputText, setInputText, isListening, handleVoiceToggle, shouldFocusPromptInput, setShouldFocusPromptInput } = useVoiceInput();
+    const { addMessage, clearMessages } = useChat();
+
+    const inputRef = useRef<TextInput>(null);
+
+    useEffect(() => {
+        if (shouldFocusPromptInput) {
+            inputRef.current?.focus();
+            setShouldFocusPromptInput(false);
+        }
+    }, [shouldFocusPromptInput]);
 
     const handleSend = () => {
+        if (!inputText.trim()) {
+            Alert.alert("Empty Input", "Please enter a query before sending.");
+            return;
+        }
+
+        if (clearOnSend) {
+            clearMessages();
+        }
+
         const newPrompt = {
             id: Date.now().toString(),
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -46,7 +68,8 @@ const PromptInput = () => {
                 description: "Processing your request..."
             }
         }
-        navigation.navigate('AiAssist', { promptData: newPrompt });
+        addMessage(newPrompt);
+        navigation.navigate('AiAssist');
 
         setInputText('');
     }
@@ -54,8 +77,9 @@ const PromptInput = () => {
     return (
         <View style={styles.askSection}>
             <TextInput
+                ref={inputRef}
                 style={styles.askText}
-                placeholder="Type your question..."
+                placeholder="Ask Anything"
                 placeholderTextColor="#999"
                 value={inputText}
                 onChangeText={setInputText}

@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import IconAssets from '../../assets/icons/IconAssets';
 

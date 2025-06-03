@@ -1,7 +1,7 @@
 import React from 'react';
 
 import Modal from 'react-native-modal';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import { styles } from './styles';
 
@@ -60,9 +60,11 @@ const SourceModal: React.FC<SourceModalProps> = ({
                 </View>
 
                 {activeTab === 'Links' && (
-                    <ScrollView style={styles.linksContainer} showsVerticalScrollIndicator={true}>
-                        {sourceLinks.map((item) => (
-                            <View key={item.id} style={styles.linkItem}>
+                    <FlatList
+                        data={sourceLinks}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={({ item }) => (
+                            <View style={styles.linkItem}>
                                 <View style={[styles.sourceDot, { backgroundColor: item.color }]} />
                                 <View>
                                     <Text style={styles.sourceLabel}>{item.label}</Text>
@@ -70,8 +72,10 @@ const SourceModal: React.FC<SourceModalProps> = ({
                                     <Text style={styles.sourceDate}>{item.date}</Text>
                                 </View>
                             </View>
-                        ))}
-                    </ScrollView>
+                        )}
+                        showsVerticalScrollIndicator={true}
+                    />
+
                 )}
             </View>
         </Modal>

@@ -1,52 +1,51 @@
 import React from 'react'
 
-import { Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 
 import { usePrompt } from '../../context/PromptContext';
+import { useChat } from '../../context/ChatContext';
 
 import { styles } from './styles';
 
 const RecentQueries = () => {
 
     const { setInputText } = usePrompt();
+    const { messages } = useChat();
 
-    const recentQueries = [
-        {
-            title: "Part Number LookUp",
-            subtitle: "How to Troubleshoot Common Issues with the X200 Smartwatch"
-        },
-        {
-            title: "Firmware Update Guide",
-            subtitle: "Steps to Optimize Battery Life on the X200 Smartwatch"
-        },
-        {
-            title: "User Manual Overview",
-            subtitle: "Understanding the Features and Functions of the X200 Smartwatch"
-        }
-    ];
 
     const handleQueryPress = (queryText: string) => {
         setInputText(queryText)
     }
 
+    const hasMessages = messages && messages.length > 0;
+
     return (
         <View style={styles.recentQueriesContainer}>
             <View style={styles.recentQueriesHeader}>
                 <Text style={styles.recentTitle}>Recent Queries</Text>
-                <Text style={styles.seeAllText}>see all</Text>
             </View>
 
-            {recentQueries.map((query, index) => (
-                <TouchableOpacity
-                    key={index}
-                    style={styles.recentCard}
-                    onPress={() => handleQueryPress(query.subtitle)}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.recentCardTitle}>{query.title}</Text>
-                    <Text style={styles.recentCardSubtitle}>{query.subtitle}</Text>
-                </TouchableOpacity>
-            ))}
+            <ScrollView contentContainerStyle={hasMessages ? null : styles.emptyStateContainer}>
+                {hasMessages ? (
+                    messages.map((msg) => (
+                        <TouchableOpacity
+                            style={styles.recentCard}
+                            onPress={() => handleQueryPress(msg.message)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.recentCardTitle}>{msg.message}</Text>
+                            <Text style={styles.recentCardSubtitle}>{msg.time}</Text>
+                        </TouchableOpacity>
+                    ))
+                ) : (
+                    <View>
+                        <Text style={styles.emptyStateText}>
+                            You haven't asked anything yet.{"\n"}Your recent queries will appear here.
+                        </Text>
+                    </View>
+                )}
+            </ScrollView>
+
         </View>
 
     )

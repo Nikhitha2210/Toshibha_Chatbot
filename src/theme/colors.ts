@@ -10,6 +10,7 @@ const Colors = {
         heading: '#212124',
         tagFill: '#6C82711F', // translucent version
         tagFillSolid: '#6C8271',
+        text: '#000000',
     },
 
     dark: {

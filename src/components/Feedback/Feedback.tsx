@@ -4,6 +4,11 @@ import { Modal, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import CheckBox from '@react-native-community/checkbox';
 
 import { styles } from './styles';
+import IconAssets from '../../assets/icons/IconAssets';
+
+import { useVoiceInput } from '../../hooks/useVoiceInput';
+
+import ListeningDots from '../ListeningDots';
 
 interface FeedbackModalProps {
     visible: boolean;
@@ -16,17 +21,11 @@ interface FeedbackModalProps {
     setUnhelpful: (value: boolean) => void;
 }
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({
-    visible,
-    onClose,
-    harmful,
-    untrue,
-    unhelpful,
-    setHarmful,
-    setUntrue,
-    setUnhelpful,
-}) => {
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful, untrue, unhelpful, setHarmful, setUntrue, setUnhelpful }) => {
     const [feedbackText, setFeedbackText] = useState('');
+    const [isVoiceActive, setIsVoiceActive] = useState(false);
+
+    const { startListening, stopListening, isListening, clearInput: clearVoiceInput, setInputText: setVoiceInputText, inputText: voiceInputText, } = useVoiceInput();
 
     useEffect(() => {
         let reasons: string[] = [];
@@ -35,22 +34,86 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
         if (untrue) reasons.push('This isn’t true.');
         if (unhelpful) reasons.push('This isn’t helpful.');
 
-        setFeedbackText(reasons.join(' '));
-    }, [harmful, untrue, unhelpful]);
+        if (!isVoiceActive) {
+            setFeedbackText(reasons.join(' '));
+        }
+    }, [harmful, untrue, unhelpful, isVoiceActive]);
+
+    useEffect(() => {
+        if (isVoiceActive && voiceInputText) {
+            setFeedbackText(voiceInputText);
+        }
+    }, [voiceInputText, isVoiceActive]);
+
+    const handleVoiceToggle = async () => {
+        if (isListening) {
+            await stopListening();
+            setIsVoiceActive(false);
+        } else {
+            clearVoiceInput();
+            setIsVoiceActive(true);
+            await startListening();
+        }
+    };
+
+    const handleTextChange = (text: string) => {
+        setFeedbackText(text);
+        if (isVoiceActive) {
+            setVoiceInputText(text);
+        }
+    };
+
+    const handleSubmit = () => {
+        if (isVoiceActive) {
+            clearVoiceInput();
+            setIsVoiceActive(false);
+        }
+        setFeedbackText('');
+        onClose();
+    };
+
+    const handleClose = () => {
+        if (isVoiceActive) {
+            clearVoiceInput();
+            setIsVoiceActive(false);
+        }
+        setFeedbackText('');
+        onClose();
+    };
 
     return (
         <Modal transparent visible={visible} animationType="fade">
             <View style={styles.feedbackOverlay}>
                 <View style={styles.feedbackModal}>
-                    <Text style={styles.feedbackTitle}>Provide feedback</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <Text style={styles.feedbackTitle}>Provide feedback</Text>
+                        <TouchableOpacity onPress={handleVoiceToggle} style={{ padding: 5 }}>
+                            {isListening ? (
+                                <ListeningDots />
+                            ) : (
+                                <IconAssets.Microphone />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
                     <TextInput
-                        style={styles.feedbackInput}
+                        style={[
+                            styles.feedbackInput,
+                            isVoiceActive && { borderColor: '#FF681F', borderWidth: 2 }
+                        ]}
                         placeholder="What was the issue with the response? How could it be improved?"
                         placeholderTextColor="#aaa"
                         multiline
                         value={feedbackText}
-                        onChangeText={setFeedbackText}
+                        onChangeText={handleTextChange}
+                        editable={!isListening}
                     />
+
+                    {isVoiceActive && (
+                        <Text style={{ color: '#FF681F', fontSize: 12, marginBottom: 10 }}>
+                            {isListening ? 'Listening...' : 'Voice input active - tap mic to record again'}
+                        </Text>
+                    )}
                     <View style={styles.checkboxRow}>
                         <CheckBox value={harmful} onValueChange={setHarmful} tintColors={{ true: '#fff', false: '#8A8A8A' }} />
                         <Text style={styles.checkboxLabel}>This is harmful/unsafe</Text>
@@ -63,8 +126,11 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
                         <CheckBox value={unhelpful} onValueChange={setUnhelpful} tintColors={{ true: '#fff', false: '#8A8A8A' }} />
                         <Text style={styles.checkboxLabel}>This isn’t helpful</Text>
                     </View>
-                    <View>
-                        <TouchableOpacity style={styles.submitBtn} onPress={onClose}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+                        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: 'transparent' }]} onPress={handleClose}>
+                            <Text style={[styles.submitBtnText, { color: '#8A8A8A' }]}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
                             <Text style={styles.submitBtnText}>Submit</Text>
                         </TouchableOpacity>
                     </View>

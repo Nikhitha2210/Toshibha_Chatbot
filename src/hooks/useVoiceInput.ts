@@ -10,6 +10,8 @@ export const useVoiceInput = () => {
     const [speechTimeout, setSpeechTimeout] = useState<NodeJS.Timeout | null>(null);
     const [speechEndTimeout, setSpeechEndTimeout] = useState<NodeJS.Timeout | null>(null);
 
+    const [shouldFocusPromptInput, setShouldFocusPromptInput] = useState(false);
+
     const { inputText, setInputText } = usePrompt();
 
     useEffect(() => {
@@ -111,12 +113,19 @@ export const useVoiceInput = () => {
         isListening ? stopListening() : startListening();
     };
 
+    const clearInput = () => {
+        setInputText('');
+    }
+
     return {
         isListening,
         inputText,
         setInputText,
         startListening,
         stopListening,
-        handleVoiceToggle
+        handleVoiceToggle,
+        clearInput,
+        shouldFocusPromptInput,
+        setShouldFocusPromptInput
     }
 }

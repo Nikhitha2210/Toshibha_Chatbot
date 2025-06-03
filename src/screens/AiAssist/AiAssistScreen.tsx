@@ -1,13 +1,16 @@
-import React from 'react'
+import React, { useState } from 'react'
 
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { Animated, Dimensions, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useNavigation } from '@react-navigation/native';
 
 import styles from './AiAssistScreen.styles'
 import Header from '../../components/header'
 import PromptInput from '../../components/PromptInput'
 import MessageCard from '../../components/MessageCard'
 import IconAssets from '../../assets/icons/IconAssets';
+import { useChat } from '../../context/ChatContext';
+import Sidebar from '../../components/Sidebar';
 
 export type PromptType = {
     id: string;
@@ -21,56 +24,80 @@ export type PromptType = {
     };
 };
 
-type RootStackParamList = {
-    Login: undefined;
-    Home: undefined;
-    AiAssist: { promptData: PromptType };
-};
-
-type RouteProps = RouteProp<RootStackParamList, 'AiAssist'>;
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const AiAssistScreen = () => {
+    const [isModalVisible, setModalVisible] = useState(false);
+    const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
 
-    const route = useRoute<RouteProps>();
-    const { promptData } = route.params;
+    const { messages } = useChat();
 
     const navigation = useNavigation();
 
     const openMenu = () => {
-
+        setModalVisible(true);
+        Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 100,
+            useNativeDriver: true,
+        }).start();
     };
 
+    const closeMenu = () => {
+        Animated.timing(slideAnim, {
+            toValue: -SCREEN_WIDTH,
+            duration: 100,
+            useNativeDriver: true,
+        }).start(() => setModalVisible(false));
+    };
+
+    const swipeGesture = Gesture.Pan()
+        .onUpdate((e) => {
+            if (e.translationX > 50) {
+                openMenu();
+            }
+        })
+        .runOnJS(true);
+
     return (
-        <View style={styles.container}>
-            <Header onMenuPress={openMenu} />
-            <View style={styles.topBar}>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <IconAssets.ArrowLeft />
+        <GestureDetector gesture={swipeGesture}>
+            <View style={styles.container}>
+                <Header onMenuPress={openMenu} />
+                <View style={styles.topBar}>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity onPress={() => navigation.goBack()}>
+                            <IconAssets.ArrowLeft />
+                        </TouchableOpacity>
+                        <Text style={styles.topBarTitle}>AI Assist</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => console.log('Options')}>
+                        <IconAssets.VerticalDots />
                     </TouchableOpacity>
-                    <Text style={styles.topBarTitle}>AI Assist</Text>
                 </View>
-                <TouchableOpacity onPress={() => console.log('Options')}>
-                    <IconAssets.VerticalDots />
-                </TouchableOpacity>
-            </View>
 
-            <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-                <MessageCard
-                    key={promptData.id}
-                    time={promptData?.time}
-                    message={promptData?.message}
-                    highlight={promptData?.highlight}
+                <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+                    {messages.map((msg) => (
+                        <MessageCard
+                            key={msg.id}
+                            time={msg.time}
+                            message={msg.message}
+                            highlight={msg.highlight}
+                        />
+                    ))}
+                </ScrollView>
+
+                <View style={styles.wrapper}>
+                    <View style={styles.inputContainer}>
+                        <PromptInput />
+                    </View>
+                </View>
+                <Sidebar
+                    visible={isModalVisible}
+                    slideAnim={slideAnim}
+                    onClose={closeMenu}
                 />
-            </ScrollView>
-
-            <View style={styles.wrapper}>
-                <View style={styles.inputContainer}>
-                    <PromptInput />
-                </View>
-            </View>
-
-        </View >
+            </View >
+        </GestureDetector>
     )
 }
 

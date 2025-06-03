@@ -47,6 +47,7 @@ export const styles = StyleSheet.create({
     },
     linksContainer: {
         gap: 12,
+        flexGrow: 1
     },
     linkItem: {
         flexDirection: 'row',

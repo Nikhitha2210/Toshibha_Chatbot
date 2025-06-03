@@ -28,26 +28,26 @@ const LoginScreen = () => {
 
   const handleSignIn = () => {
 
-    let isValid = true;
+    // let isValid = true;
 
-    if (!email) {
-      setEmailError(true);
-      isValid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError(true);
-      isValid = false
-    } else {
-      setEmailError(false);
-    }
+    // if (!email) {
+    //   setEmailError(true);
+    //   isValid = false;
+    // } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    //   setEmailError(true);
+    //   isValid = false
+    // } else {
+    //   setEmailError(false);
+    // }
 
-    if (!password) {
-      setPasswordError(true);
-      isValid = false;
-    } else {
-      setPasswordError(false);
-    }
+    // if (!password) {
+    //   setPasswordError(true);
+    //   isValid = false;
+    // } else {
+    //   setPasswordError(false);
+    // }
 
-    if (!isValid) return;
+    // if (!isValid) return;
 
     navigation.navigate("Home");
   };

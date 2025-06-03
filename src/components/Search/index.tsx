@@ -1,25 +1,42 @@
-import React, { useState } from 'react';
-import { TextInput, TouchableOpacity, View } from 'react-native';
-import styles from './styles';
-import IconAssets from '../../assets/icons/IconAssets';
+import React, { useRef, useState } from 'react';
 
-const SearchComponent = ({
-    onSearchFocus,
-    onBackPress,
-}: {
-    onSearchFocus: () => void;
-    onBackPress: () => void;
-}) => {
+import { TextInput, TouchableOpacity, View } from 'react-native';
+import { getStyles } from './styles';
+import IconAssets from '../../assets/icons/IconAssets';
+import { useThemeContext } from '../../context/ThemeContext';
+
+interface SearchComponentProps {
+    onFocus?: () => void;
+    onBlur?: () => void;
+    onEditPress?: () => void;
+}
+
+const SearchComponent: React.FC<SearchComponentProps> = ({ onFocus, onBlur, onEditPress }) => {
     const [isFocused, setIsFocused] = useState(false);
+    const [searchText, setSearchText] = useState('');
+
+    const { theme } = useThemeContext();
+    const styles = getStyles(theme);
+
+    const inputRef = useRef<TextInput>(null);
 
     const handleFocus = () => {
         setIsFocused(true);
-        onSearchFocus();
+        onFocus && onFocus();
     };
 
     const handleBack = () => {
         setIsFocused(false);
-        onBackPress();
+        onBlur && onBlur();
+        inputRef.current?.blur();
+    };
+
+    const handleClear = () => {
+        setSearchText('');
+        inputRef.current?.clear();
+        inputRef.current?.blur();
+        setIsFocused(false);
+        onBlur?.();
     };
 
     return (
@@ -33,17 +50,24 @@ const SearchComponent = ({
                     <IconAssets.Search style={styles.searchIcon} />
                 )}
                 <TextInput
+                    ref={inputRef}
                     placeholder="Search"
                     style={styles.searchInput}
+                    value={searchText}
+                    onChangeText={setSearchText}
                     onFocus={handleFocus}
+                    onBlur={() => {
+                        setIsFocused(false);
+                        onBlur && onBlur();
+                    }}
                 />
-                {isFocused && (
-                    <TouchableOpacity onPress={() => { }}>
+                {searchText.length > 0 && (
+                    <TouchableOpacity onPress={handleClear}>
                         <IconAssets.Close style={styles.clearIcon} />
                     </TouchableOpacity>
                 )}
             </View>
-            <TouchableOpacity onPress={() => { }} style={styles.pencilIconWrapper}>
+            <TouchableOpacity onPress={onEditPress} style={styles.pencilIconWrapper}>
                 <IconAssets.NewChat />
             </TouchableOpacity>
         </View>
