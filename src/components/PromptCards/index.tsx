@@ -2,13 +2,19 @@ import React from 'react'
 
 import { Text, TouchableOpacity, View } from 'react-native'
 
-import { usePrompt } from '../../context/PromptContext'
+import { getStyles } from './styles'
 
-import { styles } from './styles'
+import { usePrompt } from '../../context/PromptContext'
+import { useThemeContext } from '../../context/ThemeContext'
+
 import IconAssets from '../../assets/icons/IconAssets'
 
 const PromptCards = () => {
     const { setInputText } = usePrompt();
+
+    const { theme, toggleTheme, colors } = useThemeContext();
+
+    const styles = getStyles(theme);
 
     const handleCardPress = (cardText: string) => {
         setInputText(cardText)

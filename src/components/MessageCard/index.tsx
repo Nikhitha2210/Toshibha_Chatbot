@@ -3,10 +3,11 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-import { styles } from './styles';
+import { getStyles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
 import FeedbackModal from '../Feedback/Feedback';
 import SourceModal from '../Source';
+import { useThemeContext } from '../../context/ThemeContext';
 
 interface HighlightData {
     title: string;
@@ -32,6 +33,10 @@ const MessageCard: React.FC<MessageCardProps> = ({ time, message, highlight }) =
 
     const [liked, setLiked] = useState(false);
     const [disliked, setDisliked] = useState(false);
+
+    const { theme } = useThemeContext();
+
+    const styles = getStyles(theme);
 
     const sourceLinks = [
         {

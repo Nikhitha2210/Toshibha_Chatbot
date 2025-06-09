@@ -4,13 +4,14 @@ import { Animated, Dimensions, ScrollView, Text, TouchableOpacity, View } from '
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 
-import styles from './AiAssistScreen.styles'
+import { getStyles } from './AiAssistScreen.styles'
 import Header from '../../components/header'
 import PromptInput from '../../components/PromptInput'
 import MessageCard from '../../components/MessageCard'
-import IconAssets from '../../assets/icons/IconAssets';
+import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import { useChat } from '../../context/ChatContext';
 import Sidebar from '../../components/Sidebar';
+import { useThemeContext } from '../../context/ThemeContext';
 
 export type PromptType = {
     id: string;
@@ -33,6 +34,12 @@ const AiAssistScreen = () => {
     const { messages } = useChat();
 
     const navigation = useNavigation();
+
+    const { theme } = useThemeContext();
+
+    const styles = getStyles(theme);
+
+    const ThemedBackIcon = getThemedIcon('ArrowLeft', theme);
 
     const openMenu = () => {
         setModalVisible(true);
@@ -66,7 +73,7 @@ const AiAssistScreen = () => {
                 <View style={styles.topBar}>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <IconAssets.ArrowLeft />
+                            {ThemedBackIcon && <ThemedBackIcon />}
                         </TouchableOpacity>
                         <Text style={styles.topBarTitle}>AI Assist</Text>
                     </View>

@@ -38,7 +38,7 @@ export const getStyles = (theme: 'light' | 'dark') => {
             alignItems: 'center',
         },
         inputContainer: {
-            backgroundColor: Colors.dark.background2,
+            backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background2,
             borderTopEndRadius: 20,
             borderTopStartRadius: 20,
             paddingVertical: 20,

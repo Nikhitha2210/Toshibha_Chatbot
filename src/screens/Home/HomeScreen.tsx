@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { View, Animated, Dimensions, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -17,7 +17,7 @@ const HomeScreen = () => {
     const [isModalVisible, setModalVisible] = useState(false);
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
 
-    const { theme, toggleTheme, colors } = useThemeContext();
+    const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
     const openMenu = () => {

@@ -5,12 +5,14 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { getStyles } from './Sidebar.styles';
-import IconAssets from '../../assets/icons/IconAssets';
+import { getThemedIcon } from '../../assets/icons/IconAssets';
 
 import { useThemeContext } from '../../context/ThemeContext';
 
 import SearchComponent from '../Search';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
+import Colors from '../../theme/colors';
+import ThemeToggle from '../../theme/ThemeToggle';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,6 +32,8 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isMyQueriesEnabled, setIsMyQueriesEnabled] = useState(false);
+
     const sidebarWidth = useState(new Animated.Value(SCREEN_WIDTH * 0.7))[0];
 
     const navigation = useNavigation<NavigationProp>();
@@ -38,6 +42,11 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
     const styles = getStyles(theme);
 
     const { setInputText, setShouldFocusPromptInput } = useVoiceInput();
+
+    const ThemedFolderIcon = getThemedIcon('Folder', theme);
+    const ThemedStarIcon = getThemedIcon('Star', theme);
+    const ThemedSettingsIcon = getThemedIcon('Settings', theme);
+    const ThemedFilterIcon = getThemedIcon('Filter', theme);
 
     const expandSidebar = () => {
         setIsExpanded(true);
@@ -88,21 +97,37 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                     </TouchableOpacity>
                     <View style={styles.divider} />
                     <TouchableOpacity style={styles.navigationProjects}>
-                        <IconAssets.Folder style={styles.navigationProjectsIcon} />
+                        {ThemedFolderIcon && <ThemedFolderIcon style={styles.navigationProjectsIcon} />}
                         <Text style={styles.navigationProjectsText}>Projects</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navigationExploreQueries}>
-                        <IconAssets.Star style={styles.navigationExploreQueriesIcon} />
+                        {ThemedStarIcon && <ThemedStarIcon style={styles.navigationExploreQueriesIcon} />}
                         <Text style={styles.navigationExploreQueriesText}>Explore Queries</Text>
                     </TouchableOpacity>
                     <View style={styles.divider} />
                     <View style={styles.myQueriesWrapper}>
                         <Text style={styles.myQuerieText}>My Queries</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={styles.myQueryToogleWrapper}>
-                                <View style={styles.myQueryToogleButton} />
-                            </View>
-                            <IconAssets.Filter style={styles.myQueriesIcon} />
+                            <TouchableOpacity
+                                style={[
+                                    styles.myQueryToogleWrapper,
+                                    {
+                                        backgroundColor: isMyQueriesEnabled ? Colors.dark.primary : '#ccc',
+                                        alignItems: isMyQueriesEnabled ? 'flex-end' : 'flex-start',
+                                    },
+                                ]}
+                                onPress={() => setIsMyQueriesEnabled(!isMyQueriesEnabled)}
+                            >
+                                <View
+                                    style={[
+                                        styles.myQueryToogleButton,
+                                        {
+                                            backgroundColor: isMyQueriesEnabled ? Colors.dark.text : '#fff',
+                                        },
+                                    ]}
+                                />
+                            </TouchableOpacity>
+                            {ThemedFilterIcon && <ThemedFilterIcon style={styles.myQueriesIcon} />}
                         </View>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -123,13 +148,13 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                             ))}
                         </ScrollView>
                     </View>
-                    <TouchableOpacity style={styles.settingWrapper}>
-                        <IconAssets.Setting style={styles.settingIcon} />
-                        <Text style={styles.settingsText}>Settings</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={toggleTheme} style={{ margin: 20, alignSelf: 'center', padding: 10, backgroundColor: colors.primary, borderRadius: 8 }}>
-                        <Text style={{ color: colors.background }}>Switch to {theme === 'dark' ? 'Light' : 'Dark'} Mode</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <TouchableOpacity style={styles.settingWrapper}>
+                            {ThemedSettingsIcon && <ThemedSettingsIcon style={styles.settingIcon} />}
+                            <Text style={styles.settingsText}>Settings</Text>
+                        </TouchableOpacity>
+                        <ThemeToggle />
+                    </View>
                 </Animated.View>
             </Animated.View>
         </Modal>

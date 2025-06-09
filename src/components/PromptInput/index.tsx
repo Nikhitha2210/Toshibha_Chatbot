@@ -7,10 +7,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useChat } from '../../context/ChatContext';
 
-import { styles } from './styles';
+import { getStyles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
 
 import ListeningDots from '../ListeningDots';
+import { useThemeContext } from '../../context/ThemeContext';
 
 export type PromptType = {
     id: string;
@@ -39,6 +40,10 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
     const { addMessage, clearMessages } = useChat();
 
     const inputRef = useRef<TextInput>(null);
+
+    const { theme } = useThemeContext();
+
+    const styles = getStyles(theme);
 
     useEffect(() => {
         if (shouldFocusPromptInput) {

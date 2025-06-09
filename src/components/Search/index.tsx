@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 
 import { TextInput, TouchableOpacity, View } from 'react-native';
 import { getStyles } from './styles';
-import IconAssets from '../../assets/icons/IconAssets';
+import { getThemedIcon } from '../../assets/icons/IconAssets';
 import { useThemeContext } from '../../context/ThemeContext';
 
 interface SearchComponentProps {
@@ -19,6 +19,11 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onFocus, onBlur, onEd
     const styles = getStyles(theme);
 
     const inputRef = useRef<TextInput>(null);
+
+    const ThemedSearchIcon = getThemedIcon('Search', theme);
+    const ThemedNewChatIcon = getThemedIcon('NewChat', theme);
+    const ThemedBackIcon = getThemedIcon('ArrowLeft', theme);
+    const ThemedCloseIcon = getThemedIcon('Close', theme);
 
     const handleFocus = () => {
         setIsFocused(true);
@@ -44,10 +49,10 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onFocus, onBlur, onEd
             <View style={styles.searchWrapper}>
                 {isFocused ? (
                     <TouchableOpacity onPress={handleBack}>
-                        <IconAssets.ArrowLeft style={styles.searchIcon} />
+                        {ThemedBackIcon && <ThemedBackIcon style={styles.searchIcon} />}
                     </TouchableOpacity>
                 ) : (
-                    <IconAssets.Search style={styles.searchIcon} />
+                    ThemedSearchIcon && <ThemedSearchIcon style={styles.searchIcon} />
                 )}
                 <TextInput
                     ref={inputRef}
@@ -63,12 +68,12 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onFocus, onBlur, onEd
                 />
                 {searchText.length > 0 && (
                     <TouchableOpacity onPress={handleClear}>
-                        <IconAssets.Close style={styles.clearIcon} />
+                        {ThemedCloseIcon && <ThemedCloseIcon style={styles.searchIcon} />}
                     </TouchableOpacity>
                 )}
             </View>
             <TouchableOpacity onPress={onEditPress} style={styles.pencilIconWrapper}>
-                <IconAssets.NewChat />
+                {ThemedNewChatIcon && <ThemedNewChatIcon />}
             </TouchableOpacity>
         </View>
     );
