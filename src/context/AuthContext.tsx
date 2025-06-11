@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { AuthApiClient } from '../services/auth/AuthApiClient';
-// import { MockAuthApiClient as AuthApiClient } from '../services/auth/MockAuthApiClient';
 import { AuthStorage } from '../services/auth/storage';
 import { AuthState, UserDetailResponse, TokenResponse } from '../services/auth/types';
-import { API_BASE_URL, TENANT_ID } from '../config/environment';
+import { API_CONFIG } from '../config/environment';
 
-// Create the auth API client
-const authApiClient = new AuthApiClient(API_BASE_URL, TENANT_ID);
+// Create the auth API client using environment config
+const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
 
 // Auth actions
 type AuthAction =
@@ -107,13 +106,14 @@ export function AuthProvider(props: AuthProviderProps) {
 
     try {
       console.log('=== Validating current session ===');
+      console.log('Using base URL:', API_CONFIG.AUTH_API_BASE_URL);
       
       // Call /api/auth/me to check if session is valid
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      const response = await fetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${state.tokens.access_token}`,
-          'X-Tenant-ID': TENANT_ID,
+          'X-Tenant-ID': API_CONFIG.TENANT_ID,
           'Content-Type': 'application/json',
         },
       });
@@ -305,6 +305,7 @@ export function AuthProvider(props: AuthProviderProps) {
     try {
       console.log('=== AuthContext login start ===');
       console.log('Email:', email);
+      console.log('Using Auth API URL:', API_CONFIG.AUTH_API_BASE_URL);
       
       dispatch({ type: 'SET_LOADING', payload: true });
 
