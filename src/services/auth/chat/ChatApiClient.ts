@@ -52,8 +52,8 @@ export class ChatApiClient {
   private sessionId: string;
 
   constructor() {
-    this.baseUrl = 'http://10.11.21.110:8000';
-    this.statusUrl = 'http://10.11.21.110:8000';
+    this.baseUrl = 'http://192.168.1.221:8000';
+    this.statusUrl = 'http://192.168.1.221:8000';
     this.userId = 'user-' + uuidv4();
     this.sessionId = 'session-' + uuidv4();
   }

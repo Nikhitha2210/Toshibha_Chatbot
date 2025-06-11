@@ -349,7 +349,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             console.log('=== Chat Request ===');
-            console.log('URL: http://10.11.21.110:8000/run');
+            console.log('URL: http://192.168.1.221:8000/run');
             
             // Get token and user data
             const token = authContext.state.tokens?.access_token;
@@ -367,7 +367,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 statusPollingInterval = setInterval(async () => {
                     try {
                         const statusResponse = await fetch(
-                            `http://10.11.21.110:8000/currentStatus?uid=${userId}&sid=${currentSessionId}`,
+                            `http://192.168.1.221:8000/currentStatus?uid=${userId}&sid=${currentSessionId}`,
                             {
                                 headers: {
                                     'Authorization': `Bearer ${token}`,
@@ -425,7 +425,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
-            const response = await fetch('http://10.11.21.110:8000/run', {
+            const response = await fetch('http://192.168.1.221:8000/run', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -602,7 +602,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const token = authContext.state.tokens?.access_token;
             const userData = authContext.state.user;
 
-            const response = await fetch('http://10.11.21.110:8000/vote', {
+            const response = await fetch('http://192.168.1.221:8000/vote', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -645,7 +645,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const token = authContext.state.tokens?.access_token;
             const userData = authContext.state.user;
 
-            const response = await fetch('http://10.11.21.110:8000/feedback', {
+            const response = await fetch('http://192.168.1.221:8000/feedback', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
