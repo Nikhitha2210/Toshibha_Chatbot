@@ -37,7 +37,7 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
     const navigation = useNavigation<NavigationProp>();
 
     const { inputText, setInputText, isListening, handleVoiceToggle, shouldFocusPromptInput, setShouldFocusPromptInput } = useVoiceInput();
-    const { addMessage, clearMessages } = useChat();
+    const { sendMessage, clearMessages, isLoading } = useChat();
 
     const inputRef = useRef<TextInput>(null);
 
@@ -52,32 +52,42 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
         }
     }, [shouldFocusPromptInput]);
 
-    const handleSend = () => {
-        if (!inputText.trim()) {
-            Alert.alert("Empty Input", "Please enter a query before sending.");
+    const handleSend = async () => {
+        if (!inputText.trim() || isLoading) {
+            if (!inputText.trim()) {
+                Alert.alert("Empty Input", "Please enter a query before sending.");
+            }
             return;
         }
 
-        if (clearOnSend) {
-            clearMessages();
-        }
-
-        const newPrompt = {
-            id: Date.now().toString(),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            message: inputText,
-            highlight: {
-                title: "Your Query Response",
-                rating: 4.8,
-                reviews: 8399,
-                description: "Processing your request..."
-            }
-        }
-        addMessage(newPrompt);
-        navigation.navigate('AiAssist');
-
+        // Store the message text before clearing
+        const messageText = inputText.trim();
+        
+        // Clear input immediately for better UX
         setInputText('');
-    }
+
+        try {
+            // Clear previous messages if coming from home screen
+            if (clearOnSend) {
+                clearMessages();
+                // Navigate to AI Assist screen first
+                navigation.navigate('AiAssist');
+            }
+            
+            // Send the message (this will add user message immediately and then stream AI response)
+            await sendMessage(messageText);
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
+            // Restore text if sending failed
+            setInputText(messageText);
+        }
+    };
+
+    // Handle Enter key press
+    const handleSubmitEditing = () => {
+        handleSend();
+    };
 
     return (
         <View style={styles.askSection}>
@@ -88,30 +98,35 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                 placeholderTextColor="#999"
                 value={inputText}
                 onChangeText={setInputText}
+                onSubmitEditing={handleSubmitEditing} // Enter key support
                 multiline
+                blurOnSubmit={true} // Dismiss keyboard after enter
+                editable={!isLoading} // Disable input while loading
             />
             <View style={styles.askInputContainer}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity style={styles.askButton}>
+                    <TouchableOpacity style={styles.askButton} disabled={isLoading}>
                         <Image source={require('../../assets/images/file.png')} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.askButton}>
+                    <TouchableOpacity style={styles.askButton} disabled={isLoading}>
                         <Text style={styles.btnText}>Search</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.askButton}>
+                    <TouchableOpacity style={styles.askButton} disabled={isLoading}>
                         <Text style={styles.btnText}>Deep Search</Text>
                     </TouchableOpacity>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                    <TouchableOpacity onPress={handleVoiceToggle}>
+                    <TouchableOpacity onPress={handleVoiceToggle} disabled={isLoading}>
                         {isListening ? (
                             <ListeningDots />
                         ) : (
                             <IconAssets.Microphone />
                         )}
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={handleSend}>
-                        <IconAssets.Send />
+                    <TouchableOpacity onPress={handleSend} disabled={isLoading || !inputText.trim()}>
+                        <View style={{ opacity: (isLoading || !inputText.trim()) ? 0.5 : 1 }}>
+                            <IconAssets.Send />
+                        </View>
                     </TouchableOpacity>
                 </View>
             </View>

@@ -8,6 +8,7 @@ import { getStyles } from './Sidebar.styles';
 import { getThemedIcon } from '../../assets/icons/IconAssets';
 
 import { useThemeContext } from '../../context/ThemeContext';
+import { useChat } from '../../context/ChatContext';
 
 import SearchComponent from '../Search';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
@@ -32,13 +33,14 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isMyQueriesEnabled, setIsMyQueriesEnabled] = useState(false);
+    const [isMyQueriesEnabled, setIsMyQueriesEnabled] = useState(true);
 
     const sidebarWidth = useState(new Animated.Value(SCREEN_WIDTH * 0.7))[0];
 
     const navigation = useNavigation<NavigationProp>();
+    const { sessions, loadSession, startNewSession } = useChat();
 
-    const { theme, toggleTheme, colors } = useThemeContext();
+    const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
     const { setInputText, setShouldFocusPromptInput } = useVoiceInput();
@@ -76,12 +78,51 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
         }).start(() => onClose());
     };
 
-    const handleEditPress = () => {
+    const handleNewChat = () => {
         handleClose();
+        startNewSession();
         navigation.navigate('Home');
         setInputText('');
         setShouldFocusPromptInput(true);
     };
+
+    const handleSessionClick = (sessionId: string) => {
+        handleClose();
+        loadSession(sessionId);
+        navigation.navigate('AiAssist');
+    };
+
+    // Group sessions by time
+    const groupSessionsByTime = () => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const grouped = {
+            today: [] as typeof sessions,
+            yesterday: [] as typeof sessions,
+            pastWeek: [] as typeof sessions,
+            older: [] as typeof sessions
+        };
+
+        sessions.forEach(session => {
+            const sessionDate = new Date(session.timestamp);
+            if (sessionDate >= today) {
+                grouped.today.push(session);
+            } else if (sessionDate >= yesterday) {
+                grouped.yesterday.push(session);
+            } else if (sessionDate >= weekAgo) {
+                grouped.pastWeek.push(session);
+            } else {
+                grouped.older.push(session);
+            }
+        });
+
+        return grouped;
+    };
+
+    const groupedSessions = groupSessionsByTime();
 
     return (
         <Modal visible={visible} transparent animationType="none">
@@ -91,22 +132,28 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
 
             <Animated.View style={[styles.sidebarWrapper, { transform: [{ translateX: slideAnim }] }]}>
                 <Animated.View style={[styles.sidebar, { width: sidebarWidth }]}>
-                    <SearchComponent onFocus={expandSidebar} onBlur={resetSidebar} onEditPress={handleEditPress} />
-                    <TouchableOpacity style={{ alignItems: 'center' }}>
-                        <Text style={styles.advanceSearchText}>Advanced Search</Text>
+                    <SearchComponent onFocus={expandSidebar} onBlur={resetSidebar} onEditPress={handleNewChat} />
+                    
+                    <TouchableOpacity style={{ alignItems: 'center' }} onPress={handleNewChat}>
+                        <Text style={styles.advanceSearchText}>+ New Chat</Text>
                     </TouchableOpacity>
+                    
                     <View style={styles.divider} />
+                    
                     <TouchableOpacity style={styles.navigationProjects}>
                         {ThemedFolderIcon && <ThemedFolderIcon style={styles.navigationProjectsIcon} />}
                         <Text style={styles.navigationProjectsText}>Projects</Text>
                     </TouchableOpacity>
+                    
                     <TouchableOpacity style={styles.navigationExploreQueries}>
                         {ThemedStarIcon && <ThemedStarIcon style={styles.navigationExploreQueriesIcon} />}
                         <Text style={styles.navigationExploreQueriesText}>Explore Queries</Text>
                     </TouchableOpacity>
+                    
                     <View style={styles.divider} />
+                    
                     <View style={styles.myQueriesWrapper}>
-                        <Text style={styles.myQuerieText}>My Queries</Text>
+                        <Text style={styles.myQuerieText}>My Sessions</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <TouchableOpacity
                                 style={[
@@ -130,24 +177,104 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                             {ThemedFilterIcon && <ThemedFilterIcon style={styles.myQueriesIcon} />}
                         </View>
                     </View>
+                    
                     <View style={{ flex: 1 }}>
-                        <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-                            {[
-                                { title: 'Today', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
-                                { title: 'Past week', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
-                                { title: 'Older', items: ['Cancellation Fees', 'Subscription Sign Up', 'Settings Configuration', 'Repairs'] },
-                            ].map(section => (
-                                <View key={section.title} style={styles.recentQueriesWrapper}>
-                                    <Text style={styles.recentQueryTitle}>{section.title}</Text>
-                                    {section.items.map((item, index) => (
-                                        <Text key={index} style={styles.recentQueryText}>
-                                            <Text style={styles.recentQueryIcon}>• </Text>{item}
-                                        </Text>
-                                    ))}
-                                </View>
-                            ))}
+                        <ScrollView 
+                            contentContainerStyle={{ flexGrow: 1 }} 
+                            showsVerticalScrollIndicator={false}
+                            nestedScrollEnabled={true}
+                        >
+                            {isMyQueriesEnabled && (
+                                <>
+                                    {/* Today's Sessions */}
+                                    {groupedSessions.today.length > 0 && (
+                                        <View style={styles.recentQueriesWrapper}>
+                                            <Text style={styles.recentQueryTitle}>Today</Text>
+                                            {groupedSessions.today.map((session) => (
+                                                <TouchableOpacity
+                                                    key={session.id}
+                                                    onPress={() => handleSessionClick(session.id)}
+                                                    style={styles.sessionItem}
+                                                >
+                                                    <Text style={styles.recentQueryText}>
+                                                        <Text style={styles.recentQueryIcon}>• </Text>
+                                                        {session.title}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Yesterday's Sessions */}
+                                    {groupedSessions.yesterday.length > 0 && (
+                                        <View style={styles.recentQueriesWrapper}>
+                                            <Text style={styles.recentQueryTitle}>Yesterday</Text>
+                                            {groupedSessions.yesterday.map((session) => (
+                                                <TouchableOpacity
+                                                    key={session.id}
+                                                    onPress={() => handleSessionClick(session.id)}
+                                                    style={styles.sessionItem}
+                                                >
+                                                    <Text style={styles.recentQueryText}>
+                                                        <Text style={styles.recentQueryIcon}>• </Text>
+                                                        {session.title}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Past Week Sessions */}
+                                    {groupedSessions.pastWeek.length > 0 && (
+                                        <View style={styles.recentQueriesWrapper}>
+                                            <Text style={styles.recentQueryTitle}>Past Week</Text>
+                                            {groupedSessions.pastWeek.map((session) => (
+                                                <TouchableOpacity
+                                                    key={session.id}
+                                                    onPress={() => handleSessionClick(session.id)}
+                                                    style={styles.sessionItem}
+                                                >
+                                                    <Text style={styles.recentQueryText}>
+                                                        <Text style={styles.recentQueryIcon}>• </Text>
+                                                        {session.title}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Older Sessions */}
+                                    {groupedSessions.older.length > 0 && (
+                                        <View style={styles.recentQueriesWrapper}>
+                                            <Text style={styles.recentQueryTitle}>Older</Text>
+                                            {groupedSessions.older.map((session) => (
+                                                <TouchableOpacity
+                                                    key={session.id}
+                                                    onPress={() => handleSessionClick(session.id)}
+                                                    style={styles.sessionItem}
+                                                >
+                                                    <Text style={styles.recentQueryText}>
+                                                        <Text style={styles.recentQueryIcon}>• </Text>
+                                                        {session.title}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {/* Empty State */}
+                                    {sessions.length === 0 && (
+                                        <View style={styles.recentQueriesWrapper}>
+                                            <Text style={[styles.recentQueryText, { textAlign: 'center', fontStyle: 'italic' }]}>
+                                                No chat sessions yet.{'\n'}Start a conversation to see your history here.
+                                            </Text>
+                                        </View>
+                                    )}
+                                </>
+                            )}
                         </ScrollView>
                     </View>
+                    
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                         <TouchableOpacity style={styles.settingWrapper}>
                             {ThemedSettingsIcon && <ThemedSettingsIcon style={styles.settingIcon} />}

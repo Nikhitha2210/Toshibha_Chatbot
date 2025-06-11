@@ -25,7 +25,9 @@ export const getStyles = (theme: 'light' | 'dark') => {
         advanceSearchText: {
             color: '#FF6A00',
             marginBottom: 20,
-            textDecorationLine: 'underline'
+            textDecorationLine: 'underline',
+            fontSize: 16,
+            fontWeight: '600'
         },
         divider: {
             height: 1,
@@ -62,14 +64,14 @@ export const getStyles = (theme: 'light' | 'dark') => {
         },
         myQueriesWrapper: {
             flexDirection: 'row',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
             marginVertical: 15,
         },
         myQuerieText: {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.text,
             fontSize: 14,
-            marginRight: 10
+            fontWeight: '600'
         },
         myQueryToogleWrapper: {
             width: 40,
@@ -94,16 +96,25 @@ export const getStyles = (theme: 'light' | 'dark') => {
         },
         recentQueryTitle: {
             color: theme === 'dark' ? Colors.dark.text : Colors.light.text,
-            marginBottom: 5
+            marginBottom: 8,
+            fontSize: 14,
+            fontWeight: '600'
         },
         recentQueryText: {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.lightText,
-            marginVertical: 2,
+            marginVertical: 3,
             marginLeft: 10,
-            fontSize: 13
+            fontSize: 13,
+            lineHeight: 18
         },
         recentQueryIcon: {
             color: Colors.dark.primary,
+        },
+        sessionItem: {
+            paddingVertical: 4,
+            paddingHorizontal: 5,
+            borderRadius: 6,
+            marginVertical: 1,
         },
         settingWrapper: {
             flexDirection: 'row',

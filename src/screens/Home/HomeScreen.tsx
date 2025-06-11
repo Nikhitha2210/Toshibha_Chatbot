@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-import { View, Animated, Dimensions, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
+import { View, Animated, Dimensions, Text, ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { getStyles } from './HomeScreen.Styles';
@@ -37,51 +36,68 @@ const HomeScreen = () => {
         }).start(() => setModalVisible(false));
     };
 
+    // Swipe gesture only for left edge swipe detection
     const swipeGesture = Gesture.Pan()
         .onUpdate((e) => {
-            if (e.translationX > 50) {
+            // Only detect swipe from very left edge
+            if (e.absoluteX < 50 && e.translationX > 80) {
                 openMenu();
             }
         })
         .runOnJS(true);
 
     return (
-        <GestureDetector gesture={swipeGesture}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={0}
-                style={styles.container}
-            >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={{ flex: 1 }}>
-                        <ScrollView
-                            contentContainerStyle={{ flexGrow: 1 }}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            <View style={styles.mainWrapper}>
-                                <Header onMenuPress={openMenu} />
-                                <View style={styles.centerContainer}>
-                                    <Text style={styles.headerText}>What can I help with?</Text>
-                                    <Text style={styles.headerSubText}>Use one of most common prompts{'\n'}below to begin</Text>
-                                    <View style={styles.queriesContainer}>
-                                        <PromptCards />
-                                        <RecentQueries />
-                                    </View>
-                                </View>
-                            </View>
-                        </ScrollView>
-                        <View style={styles.inputContainer}>
-                            <PromptInput clearOnSend={true} />
-                        </View>
-                        <Sidebar
-                            visible={isModalVisible}
-                            slideAnim={slideAnim}
-                            onClose={closeMenu}
-                        />
+        <View style={styles.container}>
+            {/* Fixed Header - Outside of any gesture detector */}
+            <View style={styles.headerContainer}>
+                <Header onMenuPress={openMenu} />
+                <Text style={styles.headerText}>What can I help with?</Text>
+                <Text style={styles.headerSubText}>
+                    Use one of most common prompts{'\n'}below to begin
+                </Text>
+            </View>
+
+            {/* Scrollable Content - No gesture interference */}
+            <View style={styles.contentContainer}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={true}
+                    scrollEnabled={true}
+                    bounces={true}
+                    alwaysBounceVertical={true}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Prompt Cards */}
+                    <View style={styles.promptCardsContainer}>
+                        <PromptCards />
                     </View>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
-        </GestureDetector>
+                    
+                    {/* Recent Queries */}
+                    <View style={styles.recentQueriesContainer}>
+                        <RecentQueries />
+                    </View>
+                </ScrollView>
+            </View>
+
+            {/* Fixed Input at Bottom */}
+            <View style={styles.inputWrapper}>
+                <View style={styles.inputContainer}>
+                    <PromptInput clearOnSend={true} />
+                </View>
+            </View>
+
+            {/* Gesture detector only on left edge - doesn't interfere with content */}
+            <GestureDetector gesture={swipeGesture}>
+                <View style={styles.leftEdgeGestureArea} />
+            </GestureDetector>
+
+            <Sidebar
+                visible={isModalVisible}
+                slideAnim={slideAnim}
+                onClose={closeMenu}
+            />
+        </View>
     );
 };
 

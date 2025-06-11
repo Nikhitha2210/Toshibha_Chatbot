@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from 'react';
-
 import { Modal, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import CheckBox from '@react-native-community/checkbox';
-
 import { styles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
-
 import { useVoiceInput } from '../../hooks/useVoiceInput';
-
+import { useChat } from '../../context/ChatContext';
 import ListeningDots from '../ListeningDots';
 
 interface FeedbackModalProps {
@@ -19,20 +16,35 @@ interface FeedbackModalProps {
     setHarmful: (value: boolean) => void;
     setUntrue: (value: boolean) => void;
     setUnhelpful: (value: boolean) => void;
+    messageText?: string; // Add message text to submit feedback for
 }
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful, untrue, unhelpful, setHarmful, setUntrue, setUnhelpful }) => {
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ 
+    visible, 
+    onClose, 
+    harmful, 
+    untrue, 
+    unhelpful, 
+    setHarmful, 
+    setUntrue, 
+    setUnhelpful,
+    messageText 
+}) => {
     const [feedbackText, setFeedbackText] = useState('');
     const [isVoiceActive, setIsVoiceActive] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { startListening, stopListening, isListening, clearInput: clearVoiceInput, setInputText: setVoiceInputText, inputText: voiceInputText, } = useVoiceInput();
+    const { startListening, stopListening, isListening, setInputText: setVoiceInputText, inputText: voiceInputText, } = useVoiceInput();
+    const { submitFeedback } = useChat();
+    
+    const clearVoiceInput = () => setVoiceInputText('');
 
     useEffect(() => {
         let reasons: string[] = [];
 
         if (harmful) reasons.push('This is harmful/unsafe.');
-        if (untrue) reasons.push('This isn’t true.');
-        if (unhelpful) reasons.push('This isn’t helpful.');
+        if (untrue) reasons.push('This isn\'t true.');
+        if (unhelpful) reasons.push('This isn\'t helpful.');
 
         if (!isVoiceActive) {
             setFeedbackText(reasons.join(' '));
@@ -63,13 +75,27 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
         }
     };
 
-    const handleSubmit = () => {
-        if (isVoiceActive) {
-            clearVoiceInput();
-            setIsVoiceActive(false);
+    const handleSubmit = async () => {
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        
+        try {
+            if (messageText && feedbackText.trim()) {
+                await submitFeedback(messageText, {
+                    feedback: feedbackText.trim(),
+                    harmful,
+                    untrue,
+                    unhelpful
+                });
+                console.log('✅ Feedback submitted successfully');
+            }
+        } catch (error) {
+            console.error('❌ Feedback submission failed:', error);
+        } finally {
+            setIsSubmitting(false);
+            handleClose();
         }
-        setFeedbackText('');
-        onClose();
     };
 
     const handleClose = () => {
@@ -78,6 +104,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
             setIsVoiceActive(false);
         }
         setFeedbackText('');
+        setHarmful(false);
+        setUntrue(false);
+        setUnhelpful(false);
         onClose();
     };
 
@@ -87,7 +116,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                 <View style={styles.feedbackModal}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={styles.feedbackTitle}>Provide feedback</Text>
-                        <TouchableOpacity onPress={handleVoiceToggle} style={{ padding: 5 }}>
+                        <TouchableOpacity onPress={handleVoiceToggle} style={{ padding: 5 }} disabled={isSubmitting}>
                             {isListening ? (
                                 <ListeningDots />
                             ) : (
@@ -106,7 +135,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         multiline
                         value={feedbackText}
                         onChangeText={handleTextChange}
-                        editable={!isListening}
+                        editable={!isListening && !isSubmitting}
                     />
 
                     {isVoiceActive && (
@@ -114,24 +143,51 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                             {isListening ? 'Listening...' : 'Voice input active - tap mic to record again'}
                         </Text>
                     )}
+                    
                     <View style={styles.checkboxRow}>
-                        <CheckBox value={harmful} onValueChange={setHarmful} tintColors={{ true: '#fff', false: '#8A8A8A' }} />
+                        <CheckBox 
+                            value={harmful} 
+                            onValueChange={setHarmful} 
+                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            disabled={isSubmitting} 
+                        />
                         <Text style={styles.checkboxLabel}>This is harmful/unsafe</Text>
                     </View>
                     <View style={styles.checkboxRow}>
-                        <CheckBox value={untrue} onValueChange={setUntrue} tintColors={{ true: '#fff', false: '#8A8A8A' }} />
-                        <Text style={styles.checkboxLabel}>This isn’t true</Text>
+                        <CheckBox 
+                            value={untrue} 
+                            onValueChange={setUntrue} 
+                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            disabled={isSubmitting} 
+                        />
+                        <Text style={styles.checkboxLabel}>This isn't true</Text>
                     </View>
                     <View style={styles.checkboxRow}>
-                        <CheckBox value={unhelpful} onValueChange={setUnhelpful} tintColors={{ true: '#fff', false: '#8A8A8A' }} />
-                        <Text style={styles.checkboxLabel}>This isn’t helpful</Text>
+                        <CheckBox 
+                            value={unhelpful} 
+                            onValueChange={setUnhelpful} 
+                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            disabled={isSubmitting} 
+                        />
+                        <Text style={styles.checkboxLabel}>This isn't helpful</Text>
                     </View>
+                    
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: 'transparent' }]} onPress={handleClose}>
+                        <TouchableOpacity 
+                            style={[styles.submitBtn, { backgroundColor: 'transparent' }]} 
+                            onPress={handleClose}
+                            disabled={isSubmitting}
+                        >
                             <Text style={[styles.submitBtnText, { color: '#8A8A8A' }]}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                            <Text style={styles.submitBtnText}>Submit</Text>
+                        <TouchableOpacity 
+                            style={[styles.submitBtn, { opacity: isSubmitting ? 0.5 : 1 }]} 
+                            onPress={handleSubmit}
+                            disabled={isSubmitting}
+                        >
+                            <Text style={styles.submitBtnText}>
+                                {isSubmitting ? 'Submitting...' : 'Submit'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
