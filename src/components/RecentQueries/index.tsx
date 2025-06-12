@@ -7,63 +7,93 @@ import { styles } from './styles';
 
 const RecentQueries = () => {
     const { setInputText } = usePrompt();
-    const { recentQueries } = useChat();
+    const { recentQueries, error, clearError } = useChat();
 
     const handleQueryPress = (queryText: string) => {
-        setInputText(queryText)
+        try {
+            setInputText(queryText);
+            if (error) clearError(); // Clear any existing errors
+        } catch (err) {
+            console.error('Error setting input text:', err);
+        }
     }
+
+    // Format time difference
+    const formatTimeAgo = (timestamp: string): string => {
+        try {
+            const now = new Date();
+            const queryTime = new Date(timestamp);
+            const diffMs = now.getTime() - queryTime.getTime();
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return queryTime.toLocaleDateString();
+        } catch (error) {
+            console.error('Error formatting time:', error);
+            return 'Recently';
+        }
+    };
 
     const hasQueries = recentQueries && recentQueries.length > 0;
 
-    const formatTimeAgo = (timestamp: string) => {
-        const now = new Date();
-        const queryTime = new Date(timestamp);
-        const diffInMinutes = Math.floor((now.getTime() - queryTime.getTime()) / (1000 * 60));
-        
-        if (diffInMinutes < 1) return 'Just now';
-        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-        
-        const diffInHours = Math.floor(diffInMinutes / 60);
-        if (diffInHours < 24) return `${diffInHours}h ago`;
-        
-        const diffInDays = Math.floor(diffInHours / 24);
-        if (diffInDays < 7) return `${diffInDays}d ago`;
-        
-        return queryTime.toLocaleDateString();
-    };
-
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Recent Queries</Text>
-            
+        <View style={styles.recentQueriesContainer}>
+            <View style={styles.recentQueriesHeader}>
+                <Text style={styles.recentTitle}>Recent Queries</Text>
+                {error && (
+                    <TouchableOpacity onPress={clearError}>
+                        <Text style={{ color: '#ff6b6b', fontSize: 10 }}>Clear Error</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Show error message if there's an error loading recent queries */}
+            {error && (
+                <View style={{
+                    backgroundColor: '#ffebee',
+                    padding: 8,
+                    borderRadius: 6,
+                    marginBottom: 10,
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#f44336'
+                }}>
+                    <Text style={{ color: '#c62828', fontSize: 12 }}>
+                        Error loading recent queries: {error}
+                    </Text>
+                </View>
+            )}
+
             {hasQueries ? (
                 <ScrollView 
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
+                    style={{ flex: 1, maxHeight: 250 }}
+                    contentContainerStyle={{ paddingBottom: 10 }}
                     showsVerticalScrollIndicator={true}
-                    scrollEnabled={true}
-                    bounces={true}
                     nestedScrollEnabled={true}
                 >
                     {recentQueries.map((query) => (
                         <TouchableOpacity
                             key={query.id}
-                            style={styles.queryCard}
-                            onPress={() => handleQueryPress(query.question)}
+                            style={styles.recentCard}
+                            onPress={() => handleQueryPress(query.message)}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.queryText} numberOfLines={2}>
-                                {query.question}
+                            <Text style={styles.recentCardTitle} numberOfLines={2}>
+                                {query.message}
                             </Text>
-                            <Text style={styles.queryTime}>
+                            <Text style={styles.recentCardSubtitle}>
                                 {formatTimeAgo(query.timestamp)}
                             </Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
             ) : (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>
+                <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateText}>
                         You haven't asked anything yet.{"\n"}Your recent queries will appear here.
                     </Text>
                 </View>

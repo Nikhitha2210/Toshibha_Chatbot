@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { getStyles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
 import FeedbackModal from '../Feedback/Feedback';
 import SourceModal from '../Source';
-import SourcePills from '../SourcePills/SourcePills';
 import { useThemeContext } from '../../context/ThemeContext';
-import { useChat, SourceReference } from '../../context/ChatContext';
+import { useChat } from '../../context/ChatContext';
 
 interface HighlightData {
     title: string;
     rating: number;
     reviews: number;
     description: string;
+}
+
+export interface SourceReference {
+    filename: string;
+    pages: string;
+    awsLink: string;
+    url?: string;
 }
 
 interface MessageCardProps {
@@ -24,7 +30,7 @@ interface MessageCardProps {
     isUser?: boolean;
     isStreaming?: boolean;
     agentStatus?: string;
-    sources?: SourceReference[];
+    sources?: SourceReference[]; // Accept SourceReference array
     hasVoted?: boolean;
     voteType?: 'upvote' | 'downvote';
 }
@@ -52,71 +58,62 @@ const MessageCard: React.FC<MessageCardProps> = ({
     const [disliked, setDisliked] = useState(hasVoted && voteType === 'downvote');
 
     const { theme } = useThemeContext();
-    const { submitVote, agentStatus: currentAgentStatus } = useChat();
+    const { submitVote, error, clearError } = useChat();
 
     const styles = getStyles(theme);
 
-    // Handle upvote
+    // Check if this is an error message
+    const isErrorMessage = message.toLowerCase().includes('error:') || 
+                          message.toLowerCase().includes('failed') ||
+                          message.toLowerCase().includes('network request failed');
+
+    // Handle upvote with error handling
     const handleLike = async () => {
-        if (liked || (hasVoted && voteType === 'upvote')) return; // Already upvoted
-        
-        // Update UI immediately for better UX
-        setLiked(true);
-        setDisliked(false);
+        if (liked || (hasVoted && voteType === 'upvote')) return;
         
         try {
+            setLiked(true);
+            setDisliked(false);
+            
             await submitVote(message, 'upvote');
             console.log('✅ Upvote successful');
+            
         } catch (error) {
             console.error('❌ Upvote error:', error);
-            // Keep the UI updated even if backend fails
-            // setLiked(false); // Uncomment to revert on error
+            setLiked(false); // Revert on error
+            Alert.alert('Error', 'Failed to submit vote. Please try again.');
         }
     };
 
-    // Handle downvote
+    // Handle downvote with error handling
     const handleDislike = async () => {
-        if (disliked || (hasVoted && voteType === 'downvote')) return; // Already downvoted
-        
-        // Update UI immediately and show feedback modal
-        setDisliked(true);
-        setLiked(false);
-        setFeedbackVisible(true); // Show feedback modal immediately
+        if (disliked || (hasVoted && voteType === 'downvote')) return;
         
         try {
+            setDisliked(true);
+            setLiked(false);
+            setFeedbackVisible(true);
+            
             await submitVote(message, 'downvote');
             console.log('✅ Downvote successful, feedback modal opened');
+            
         } catch (error) {
             console.error('❌ Downvote error:', error);
-            // Keep the UI updated and modal open even if backend fails
-            // setDisliked(false); // Uncomment to revert on error
-            // setFeedbackVisible(false); // Uncomment to close modal on error
+            setDisliked(false); // Revert on error
+            setFeedbackVisible(false);
+            Alert.alert('Error', 'Failed to submit vote. Please try again.');
         }
     };
 
-    const sourceLinks = [
-        {
-            id: 1,
-            label: 'Source 1',
-            title: 'Source Article Title 1',
-            date: 'March 18',
-            color: '#A259FF',
-        },
-        {
-            id: 2,
-            label: 'Source 2',
-            title: 'Source Article Title 2',
-            date: 'March 18',
-            color: '#9CA3AF',
-        },
-        {
-            id: 3,
-            label: 'Source 3',
-            title: 'Source Article Title 3',
-            date: 'March 18',
-            color: '#10B981',
-        },
-    ];
+    // Convert SourceReference to format expected by SourceModal
+    const sourceLinks = sources.map((source, index) => ({
+        id: index + 1,
+        label: `Source ${index + 1}`,
+        title: source.filename,
+        date: `Page ${source.pages}`,
+        color: index === 0 ? '#A259FF' : index === 1 ? '#9CA3AF' : '#10B981',
+        url: source.url
+    }));
 
     // If it's a user message, show simple orange bubble (right side)
     if (isUser) {
@@ -148,7 +145,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
         );
     }
 
-    // AI message (left side) - Original design with voting and sources
+    // AI message (left side) - Original design with voting and error handling
     return (
         <View style={styles.card}>
             <View style={styles.headerRow}>
@@ -156,28 +153,96 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     <IconAssets.Frame />
                 </View>
                 <Text style={styles.timeText}>{time}</Text>
+                
+                {/* Show error indicator if there's an error */}
+                {error && (
+                    <TouchableOpacity 
+                        onPress={clearError}
+                        style={{ marginLeft: 'auto', padding: 5 }}
+                    >
+                        <Icon name="alert-circle" size={20} color="#ff6b6b" />
+                    </TouchableOpacity>
+                )}
             </View>
 
-            {/* Show agent status when streaming */}
-            {isStreaming && (agentStatus || currentAgentStatus) && (
-                <View style={styles.statusContainer}>
-                    <Text style={styles.statusText}>
-                        {agentStatus || currentAgentStatus}
+            {/* Show global error message */}
+            {error && (
+                <View style={{
+                    backgroundColor: '#ffebee',
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 10,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#f44336'
+                }}>
+                    <Text style={{ color: '#c62828', fontSize: 14 }}>
+                        ⚠️ {error}
                     </Text>
-                    <View style={styles.loadingDots}>
-                        <View style={[styles.dot, styles.dot1]} />
-                        <View style={[styles.dot, styles.dot2]} />
-                        <View style={[styles.dot, styles.dot3]} />
-                    </View>
+                    <TouchableOpacity onPress={clearError} style={{ marginTop: 5 }}>
+                        <Text style={{ color: '#1976d2', fontSize: 12 }}>Tap to dismiss</Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
-            <Text style={styles.messageText}>
+            {/* Show agent status when streaming */}
+            {isStreaming && agentStatus && (
+                <View style={{
+                    backgroundColor: 'rgba(255, 106, 0, 0.1)',
+                    padding: 8,
+                    borderRadius: 6,
+                    marginBottom: 10,
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#FF6A00'
+                }}>
+                    <Text style={[styles.messageText, { 
+                        fontStyle: 'italic', 
+                        color: '#FF6A00',
+                        fontSize: 13 
+                    }]}>
+                        {agentStatus}
+                        {isStreaming && <Text style={{ color: '#FF6A00' }}>...</Text>}
+                    </Text>
+                </View>
+            )}
+
+            {/* Message content with error styling */}
+            <Text style={[
+                styles.messageText,
+                isErrorMessage && {
+                    color: '#f44336',
+                    backgroundColor: '#ffebee',
+                    padding: 10,
+                    borderRadius: 6,
+                    fontFamily: 'monospace',
+                    fontSize: 13
+                }
+            ]}>
                 {message}
-                {isStreaming && <Text style={{ color: '#FF6A00' }}>|</Text>}
+                {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
             </Text>
 
-            {highlight && (
+            {/* Retry button for error messages */}
+            {isErrorMessage && (
+                <TouchableOpacity 
+                    style={{
+                        backgroundColor: '#FF6A00',
+                        padding: 8,
+                        borderRadius: 6,
+                        marginTop: 8,
+                        alignSelf: 'flex-start'
+                    }}
+                    onPress={() => {
+                        clearError();
+                        Alert.alert('Retry', 'Please try sending your message again.');
+                    }}
+                >
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                        Try Again
+                    </Text>
+                </TouchableOpacity>
+            )}
+
+            {highlight && !isErrorMessage && (
                 <View style={styles.highlightBox}>
                     <Text style={styles.productTitle}>{highlight.title}</Text>
                     <View style={styles.ratingRow}>
@@ -190,55 +255,59 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* Source Pills */}
-            {sources && sources.length > 0 && (
-                <View style={styles.sourcesContainer}>
-                    <Text style={styles.sourcesLabel}>Sources:</Text>
-                    <SourcePills sources={sources} theme={theme} />
+            {/* Action buttons - hide for error messages */}
+            {!isErrorMessage && (
+                <View style={styles.actionsRow}>
+                    <TouchableOpacity 
+                        style={styles.sourceButton} 
+                        onPress={() => setSourceVisible(true)}
+                        disabled={sources.length === 0}
+                    >
+                        <Text style={[
+                            styles.sourceText,
+                            sources.length === 0 && { opacity: 0.5 }
+                        ]}>
+                            Sources {sources.length > 0 && `(${sources.length})`}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.voteButtons}>
+                        {liked || (hasVoted && voteType === 'upvote') ? (
+                            <TouchableOpacity 
+                                disabled
+                                style={styles.voteButton}
+                            >
+                                <IconAssets.ThumbsUpBold />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity 
+                                onPress={handleLike}
+                                style={styles.voteButton}
+                                activeOpacity={0.7}
+                            >
+                                <IconAssets.ThumbsUp />
+                            </TouchableOpacity>
+                        )}
+                        
+                        {disliked || (hasVoted && voteType === 'downvote') ? (
+                            <TouchableOpacity 
+                                disabled
+                                style={styles.voteButton}
+                            >
+                                <IconAssets.ThumbsDownBold />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity 
+                                onPress={handleDislike}
+                                style={styles.voteButton}
+                                activeOpacity={0.7}
+                            >
+                                <IconAssets.ThumbsDown />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
             )}
-
-            <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.sourceButton} onPress={() => setSourceVisible(true)}>
-                    <Text style={styles.sourceText}>Sources</Text>
-                </TouchableOpacity>
-
-                <View style={styles.actionIcons}>
-                    {liked || (hasVoted && voteType === 'upvote') ? (
-                        <TouchableOpacity onPress={() => {
-                            // Already voted, can't change
-                        }}>
-                            <IconAssets.ThumbsUpBold />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity onPress={handleLike}>
-                            <IconAssets.ThumbsUp />
-                        </TouchableOpacity>
-                    )}
-                    
-                    {disliked || (hasVoted && voteType === 'downvote') ? (
-                        <TouchableOpacity onPress={() => {
-                            // Already voted, can't change
-                        }}>
-                            <IconAssets.ThumbsDownBold />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity onPress={handleDislike}>
-                            <IconAssets.ThumbsDown />
-                        </TouchableOpacity>
-                    )}
-                    
-                    <TouchableOpacity>
-                        <IconAssets.Flag />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
-                        <IconAssets.Copy />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
-                        <IconAssets.Refresh />
-                    </TouchableOpacity>
-                </View>
-            </View>
 
             <FeedbackModal
                 visible={feedbackVisible}
@@ -249,7 +318,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 setHarmful={setHarmful}
                 setUntrue={setUntrue}
                 setUnhelpful={setUnhelpful}
-                messageText={message}
             />
 
             <SourceModal

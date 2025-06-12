@@ -20,7 +20,7 @@ const AiAssistScreen = () => {
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
     const scrollViewRef = useRef<ScrollView>(null);
 
-    const { messages } = useChat();
+    const { messages, error, clearError } = useChat();
     const navigation = useNavigation();
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
@@ -80,6 +80,28 @@ const AiAssistScreen = () => {
                 </TouchableOpacity>
             </View>
 
+            {/* Global error display */}
+            {error && (
+                <View style={{
+                    backgroundColor: '#ffebee',
+                    padding: 10,
+                    marginHorizontal: 10,
+                    borderRadius: 8,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#f44336',
+                    marginBottom: 10
+                }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#c62828', fontSize: 14, flex: 1 }}>
+                            ⚠️ {error}
+                        </Text>
+                        <TouchableOpacity onPress={clearError} style={{ marginLeft: 10 }}>
+                            <Text style={{ color: '#1976d2', fontSize: 12 }}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             {/* Messages ScrollView - No gesture interference */}
             <View style={styles.messagesContainer}>
                 <ScrollView 
@@ -108,7 +130,7 @@ const AiAssistScreen = () => {
                                 isUser={msg.isUser}
                                 isStreaming={msg.isStreaming || false}
                                 agentStatus={msg.agentStatus}
-                                sources={msg.sources || []}
+                                sources={msg.sources || []} // Direct pass - already SourceReference[]
                                 hasVoted={msg.hasVoted || false}
                                 voteType={msg.voteType}
                                 highlight={msg.highlight}

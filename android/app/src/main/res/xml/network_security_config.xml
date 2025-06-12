@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">3.128.153.238</domain>
+        <domain includeSubdomains="true">tgcsbe.iopex.ai</domain>
+        <domain includeSubdomains="true">tgcs.iopex.ai</domain>
+    </domain-config>
+</network-security-config>

@@ -29,41 +29,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
             color: Colors.dark.primary,
             fontSize: 14,
         },
-        statusContainer: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            backgroundColor: theme === 'dark' ? Colors.dark.background3 : Colors.light.background,
-            borderRadius: 6,
-        },
-        statusText: {
-            color: '#FF6A00',
-            fontSize: 13,
-            fontStyle: 'italic',
-            marginRight: 8,
-        },
-        loadingDots: {
-            flexDirection: 'row',
-            alignItems: 'center',
-        },
-        dot: {
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: '#FF6A00',
-            marginHorizontal: 1,
-        },
-        dot1: {
-            opacity: 0.4,
-        },
-        dot2: {
-            opacity: 0.7,
-        },
-        dot3: {
-            opacity: 1,
-        },
         messageText: {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.iconGrey,
             fontSize: 14,
@@ -93,17 +58,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
             color: Colors.dark.subText,
             fontSize: 13,
         },
-        sourcesContainer: {
-            marginTop: 12,
-            marginBottom: 8,
-        },
-        sourcesLabel: {
-            color: theme === 'dark' ? Colors.dark.text : Colors.light.text,
-            fontSize: 12,
-            fontWeight: '600',
-            marginBottom: 4,
-            marginLeft: 5,
-        },
         actionsRow: {
             flexDirection: 'row',
             marginTop: 10,
@@ -122,9 +76,49 @@ export const getStyles = (theme: 'light' | 'dark') => {
             color: Colors.dark.subText,
             fontSize: 10,
         },
+        voteButtons: {
+            flexDirection: 'row',
+            gap: 20, // More space between vote buttons for easier tapping
+        },
+        voteButton: {
+            padding: 12, // Bigger touch area around the same icons
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 44, // iOS/Android recommended minimum touch target
+            minHeight: 44,
+        },
         actionIcons: {
             flexDirection: 'row',
             gap: 10
-        }
+        },
+        statusContainer: {
+            backgroundColor: 'rgba(255, 106, 0, 0.1)',
+            padding: 8,
+            borderRadius: 6,
+            marginBottom: 10,
+            borderLeftWidth: 3,
+            borderLeftColor: '#FF6A00',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+        },
+        statusText: {
+            fontStyle: 'italic',
+            color: '#FF6A00',
+            fontSize: 13,
+            flex: 1,
+        },
+        loadingDots: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 3,
+        },
+        loadingDot: {
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: '#FF6A00',
+        },
     })
 }
