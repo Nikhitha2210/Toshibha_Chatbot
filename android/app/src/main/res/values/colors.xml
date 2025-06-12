@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/values/colors.xml -->
+<resources>
+    <color name="primary_color">#FF6A00</color>
+    <color name="primary_dark">#E55100</color>
+    <color name="accent_color">#FF6A00</color>
+    <color name="background_color">#1A1A1A</color>
+    <color name="text_color">#FFFFFF</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

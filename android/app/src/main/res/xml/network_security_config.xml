@@ -1,8 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/xml/network_security_config.xml -->
 <network-security-config>
+    <!-- Allow cleartext traffic for specific production servers -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">3.128.153.238</domain>
-        <domain includeSubdomains="true">tgcsbe.iopex.ai</domain>
-        <domain includeSubdomains="true">tgcs.iopex.ai</domain>
+        <!-- Production auth server (HTTP) -->
+        <domain includeSubdomains="false">3.128.153.238</domain>
+        
+        <!-- Development servers (backup) -->
+        <domain includeSubdomains="false">192.168.1.221</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
     </domain-config>
+    
+    <!-- Default config - secure HTTPS only -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust system certificates -->
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Debug config for development certificates -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>
