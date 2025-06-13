@@ -137,6 +137,7 @@ type ChatContextType = {
     refreshChatHistory: () => Promise<void>;
     clearAllUserData: () => Promise<void>;
     addNewSession: () => void;
+    cleanupEmptySessions: () => Promise<void>; // ✅ Added cleanup function
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -155,7 +156,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const lastAutoSaveRef = useRef<number>(0);
     
     const authContext = useAuth();
-
 
     const safeApiCall = useCallback(async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
         try {
@@ -178,12 +178,79 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             setError(errorMessage);
             throw new Error(errorMessage);
         }
-    }, []); // 12
+    }, []);
 
     const getCurrentUserId = useCallback(() => {
         const userData = authContext.state.user;
         return String((userData as any)?.id || (userData as any)?.user_id || "7");
-    }, [authContext]); // 13
+    }, [authContext]);
+
+    // ✅ NEW: Check if session has meaningful content
+    const hasSessionContent = useCallback((sessionMessages: ChatMessage[]) => {
+        if (!sessionMessages || sessionMessages.length < 2) return false;
+        
+        const hasUserMessage = sessionMessages.some(msg => 
+            msg.isUser && msg.message.trim().length > 0
+        );
+        const hasAIMessage = sessionMessages.some(msg => 
+            !msg.isUser && 
+            !msg.isStreaming && 
+            msg.message.trim().length > 0 &&
+            !msg.message.includes('Processing your request') &&
+            !msg.message.includes('Error:')
+        );
+        
+        return hasUserMessage && hasAIMessage;
+    }, []);
+
+    // ✅ NEW: Clean up empty sessions
+    const cleanupEmptySessions = useCallback(async () => {
+        try {
+            console.log('🧹 Cleaning up empty sessions...');
+            
+            const userId = getCurrentUserId();
+            const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
+            
+            if (userSessionsStr) {
+                const sessionList = JSON.parse(userSessionsStr);
+                const validSessions = [];
+                let removedCount = 0;
+                
+                for (const sessionRef of sessionList) {
+                    try {
+                        const sessionStr = await AsyncStorage.getItem(`session_${sessionRef.id}`);
+                        if (sessionStr) {
+                            const fullSession = JSON.parse(sessionStr);
+                            
+                            if (hasSessionContent(fullSession.messages)) {
+                                validSessions.push(sessionRef);
+                            } else {
+                                // Remove empty session from storage
+                                await AsyncStorage.removeItem(`session_${sessionRef.id}`);
+                                removedCount++;
+                                console.log('🗑️ Removed empty session:', sessionRef.title || sessionRef.id);
+                            }
+                        }
+                    } catch (error) {
+                        console.log(`Failed to process session ${sessionRef.id}:`, error);
+                        // Remove corrupted session reference
+                        await AsyncStorage.removeItem(`session_${sessionRef.id}`);
+                        removedCount++;
+                    }
+                }
+                
+                // Update the session list with only valid sessions
+                await AsyncStorage.setItem(`user_sessions_${userId}`, JSON.stringify(validSessions));
+                
+                // Update in-memory sessions
+                setSessions(prev => prev.filter(session => hasSessionContent(session.messages)));
+                
+                console.log(`✅ Cleanup complete: Removed ${removedCount} empty sessions, kept ${validSessions.length} valid sessions`);
+            }
+        } catch (error) {
+            console.error('❌ Failed to cleanup empty sessions:', error);
+        }
+    }, [getCurrentUserId, hasSessionContent]);
 
     const fetchChatHistoryFromBackend = useCallback(async (): Promise<ChatSession[]> => {
         try {
@@ -259,7 +326,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('❌ Failed to fetch chat history from backend:', error);
             return [];
         }
-    }, [authContext, getCurrentUserId]); // 14
+    }, [authContext, getCurrentUserId]);
 
     const convertBackendChatHistory = useCallback((backendData: any, userId: string): ChatSession[] => {
         try {
@@ -358,16 +425,18 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 };
             });
 
-            convertedSessions.sort((a, b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime());
+            // ✅ FIXED: Filter out sessions without meaningful content
+            const validSessions = convertedSessions.filter(session => hasSessionContent(session.messages));
+            validSessions.sort((a, b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime());
 
-            console.log(`✅ Converted ${convertedSessions.length} chat sessions from backend`);
-            return convertedSessions;
+            console.log(`✅ Converted ${validSessions.length} valid chat sessions from backend (filtered out ${convertedSessions.length - validSessions.length} empty sessions)`);
+            return validSessions;
             
         } catch (error) {
             console.error('❌ Error converting backend chat history:', error);
             return [];
         }
-    }, []); // 15
+    }, [hasSessionContent]);
 
     const saveSessionToBackend = useCallback(async (session: ChatSession) => {
         try {
@@ -484,7 +553,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('❌ Failed to save session to backend:', error);
             return false;
         }
-    }, [authContext, getCurrentUserId]); // 16
+    }, [authContext, getCurrentUserId]);
 
     const saveVoteToStorage = useCallback(async (messageId: string, messageText: string, voteType: 'upvote' | 'downvote') => {
         try {
@@ -509,7 +578,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Failed to save vote to storage:', error);
         }
-    }, [getCurrentUserId]); // 17
+    }, [getCurrentUserId]);
 
     const loadVotesFromStorage = useCallback(async () => {
         try {
@@ -542,10 +611,16 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to load votes from storage:', error);
         }
         return [];
-    }, [getCurrentUserId]); // 18
+    }, [getCurrentUserId]);
 
     const saveSessionToStorage = useCallback(async (session: ChatSession) => {
         try {
+            // ✅ FIXED: Only save sessions with meaningful content
+            if (!hasSessionContent(session.messages)) {
+                console.log('⏭️ Skipping storage save - session has no meaningful content');
+                return;
+            }
+
             const now = Date.now();
             if (now - lastAutoSaveRef.current < 10000) {
                 return;
@@ -574,7 +649,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Failed to save session to storage:', error);
         }
-    }, [getCurrentUserId]); // 19
+    }, [getCurrentUserId, hasSessionContent]);
 
     const loadUserSessions = useCallback(async (): Promise<ChatSession[]> => {
         try {
@@ -591,21 +666,24 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         const sessionStr = await AsyncStorage.getItem(`session_${sessionRef.id}`);
                         if (sessionStr) {
                             const fullSession = JSON.parse(sessionStr);
-                            fullSessions.push(fullSession);
+                            // ✅ FIXED: Only load sessions with meaningful content
+                            if (hasSessionContent(fullSession.messages)) {
+                                fullSessions.push(fullSession);
+                            }
                         }
                     } catch (error) {
                         console.log(`Failed to load session ${sessionRef.id}:`, error);
                     }
                 }
                 
-                console.log('✅ Loaded local sessions:', fullSessions.length);
+                console.log('✅ Loaded local sessions with content:', fullSessions.length);
                 return fullSessions;
             }
         } catch (error) {
             console.error('Failed to load user sessions:', error);
         }
         return [];
-    }, [getCurrentUserId]); // 20
+    }, [getCurrentUserId, hasSessionContent]);
 
     const refreshChatHistory = useCallback(async () => {
         try {
@@ -626,21 +704,29 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 )
             );
             
-            uniqueSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
+            // ✅ FIXED: Filter out empty sessions
+            const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
+            validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
             
-            console.log(`📊 Total sessions: ${uniqueSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length})`);
+            console.log(`📊 Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length}, Filtered: ${uniqueSessions.length - validSessions.length})`);
             
-            setSessions(uniqueSessions);
+            setSessions(validSessions);
             console.log('✅ Chat history refreshed successfully');
             
         } catch (error) {
             console.error('❌ Failed to refresh chat history:', error);
             setError('Failed to refresh chat history');
         }
-    }, [fetchChatHistoryFromBackend, loadUserSessions]); // 21
+    }, [fetchChatHistoryFromBackend, loadUserSessions, hasSessionContent]);
 
     const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
         try {
+            // ✅ FIXED: Only save sessions with meaningful content
+            if (!hasSessionContent(sessionData.messages)) {
+                console.log('⏭️ Skipping auto-save - session has no meaningful content');
+                return;
+            }
+
             await saveSessionToStorage(sessionData);
             
             const backendSaved = await saveSessionToBackend(sessionData);
@@ -659,7 +745,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('❌ Enhanced auto-save failed:', error);
         }
-    }, [saveSessionToStorage, saveSessionToBackend]); // 22
+    }, [saveSessionToStorage, saveSessionToBackend, hasSessionContent]);
 
     const clearAllUserData = useCallback(async () => {
         try {
@@ -688,7 +774,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Failed to clear user data:', error);
         }
-    }, [getCurrentUserId]); // 23
+    }, [getCurrentUserId]);
 
     const addMessage = useCallback((message: ChatMessage) => {
         try {
@@ -698,7 +784,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error adding message:', error);
             setError('Failed to add message');
         }
-    }, []); // 24
+    }, []);
 
     const clearMessages = useCallback(() => {
         try {
@@ -708,11 +794,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error clearing messages:', error);
             setError('Failed to clear messages');
         }
-    }, []); // 25
+    }, []);
 
     const clearError = useCallback(() => {
         setError(null);
-    }, []); // 26
+    }, []);
 
     const updateMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
         try {
@@ -723,7 +809,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error updating message:', error);
             setError('Failed to update message');
         }
-    }, []); // 27
+    }, []);
 
     const saveRecentQuery = useCallback(async (queryText: string) => {
         try {
@@ -745,7 +831,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Error saving recent query:', error);
         }
-    }, [recentQueries]); // 28
+    }, [recentQueries]);
 
     const loadRecentQueries = useCallback(async () => {
         try {
@@ -758,11 +844,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Error loading recent queries:', error);
         }
-    }, []); // 29
+    }, []);
 
+    // ✅ FIXED: Only save sessions with meaningful content
     const startNewSession = useCallback(() => {
         try {
-            if (messages.length > 0 && currentSessionId) {
+            // Only save if session has both user and AI messages with content
+            if (messages.length >= 2 && currentSessionId && hasSessionContent(messages)) {
                 const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'New Chat';
                 const newSession: ChatSession = {
                     id: currentSessionId,
@@ -776,7 +864,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 
                 enhancedAutoSave(newSession);
                 setSessions(prev => [newSession, ...prev.filter(s => s.id !== currentSessionId)]);
-                console.log('✅ Session saved:', sessionTitle);
+                console.log('✅ Session saved with content:', sessionTitle);
+            } else {
+                console.log('⏭️ Skipping empty session save - no meaningful content');
             }
             
             const newSessionId = uuidv4();
@@ -789,11 +879,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error starting new session:', error);
             setError('Failed to start new session');
         }
-    }, [messages, currentSessionId, clearMessages, clearError, getCurrentUserId, enhancedAutoSave]); // 30
+    }, [messages, currentSessionId, clearMessages, clearError, getCurrentUserId, enhancedAutoSave, hasSessionContent]);
 
     const addNewSession = useCallback(() => {
         startNewSession();
-    }, [startNewSession]); // 31
+    }, [startNewSession]);
 
     const loadSession = useCallback((sessionId: string) => {
         try {
@@ -812,11 +902,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error loading session:', error);
             setError('Failed to load session');
         }
-    }, [sessions, clearError, loadVotesFromStorage]); // 32
+    }, [sessions, clearError, loadVotesFromStorage]);
 
     const setSelectedSession = useCallback((sessionId: string) => {
         loadSession(sessionId);
-    }, [loadSession]); // 33
+    }, [loadSession]);
 
     const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
         try {
@@ -869,7 +959,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error extracting sources:', error);
             return [];
         }
-    }, []); // 34
+    }, []);
 
     const sendMessage = useCallback(async (text: string) => {
         if (!text.trim() || isLoading) {
@@ -1090,81 +1180,80 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery, getCurrentUserId, extractSourcesFromText]); // 35
+    }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery, getCurrentUserId, extractSourcesFromText]);
 
-
-const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
-    try {
-        console.log(`🗳️ Submitting ${voteType} for message`);
-        
-        const isSessionValid = await authContext.validateSessionBeforeRequest();
-        if (!isSessionValid) {
-            throw new Error('Session expired. Please log in again.');
-        }
-
-        const token = authContext.state.tokens?.access_token;
-
-        const aiMessage = messages.find(msg => 
-            !msg.isUser && msg.message === messageText
-        );
-
-        if (!aiMessage) {
-            throw new Error('Message not found for voting');
-        }
-
-        const voteUrl = 'https://tgcsbe.iopex.ai/vote';
-        
-        const votePayload = {
-            message_id: aiMessage.id,                    
-            user_id: getCurrentUserId(),                 
-            vote: voteType === 'upvote' ? 1 : -1,       
-            session_id: currentSessionId || APP_SESSION_ID 
-        };
-
-        console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
-
-        const response = await fetch(voteUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(votePayload),
-        });
-
-        console.log('🗳️ Vote response status:', response.status);
-
-        if (response.ok) {
-            const responseText = await response.text();
-            console.log('✅ Vote SUCCESS! Response:', responseText);
-
-            setMessages(prev => prev.map(msg => 
-                msg.message === messageText && !msg.isUser ? {
-                    ...msg,
-                    hasVoted: true,
-                    voteType: voteType
-                } : msg
-            ));
-
-            await saveVoteToStorage(aiMessage.id, messageText, voteType);
-
-            console.log(`✅ ${voteType} submitted successfully`);
-            clearError();
+    const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
+        try {
+            console.log(`🗳️ Submitting ${voteType} for message`);
             
-        } else {
-            const errorText = await response.text();
-            console.log('❌ Vote failed:', response.status, '-', errorText);
-            throw new Error(`Vote submission failed: ${response.status} - ${errorText}`);
-        }
+            const isSessionValid = await authContext.validateSessionBeforeRequest();
+            if (!isSessionValid) {
+                throw new Error('Session expired. Please log in again.');
+            }
 
-    } catch (error) {
-        console.error('❌ Vote submission error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
-        setError(errorMessage);
-        throw new Error(errorMessage);
-    }
-}, [authContext, clearError, messages, currentSessionId, getCurrentUserId, saveVoteToStorage]); // 36
+            const token = authContext.state.tokens?.access_token;
+
+            const aiMessage = messages.find(msg => 
+                !msg.isUser && msg.message === messageText
+            );
+
+            if (!aiMessage) {
+                throw new Error('Message not found for voting');
+            }
+
+            const voteUrl = 'https://tgcsbe.iopex.ai/vote';
+            
+            const votePayload = {
+                message_id: aiMessage.id,                    
+                user_id: getCurrentUserId(),                 
+                vote: voteType === 'upvote' ? 1 : -1,       
+                session_id: currentSessionId || APP_SESSION_ID 
+            };
+
+            console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
+
+            const response = await fetch(voteUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(votePayload),
+            });
+
+            console.log('🗳️ Vote response status:', response.status);
+
+            if (response.ok) {
+                const responseText = await response.text();
+                console.log('✅ Vote SUCCESS! Response:', responseText);
+
+                setMessages(prev => prev.map(msg => 
+                    msg.message === messageText && !msg.isUser ? {
+                        ...msg,
+                        hasVoted: true,
+                        voteType: voteType
+                    } : msg
+                ));
+
+                await saveVoteToStorage(aiMessage.id, messageText, voteType);
+
+                console.log(`✅ ${voteType} submitted successfully`);
+                clearError();
+                
+            } else {
+                const errorText = await response.text();
+                console.log('❌ Vote failed:', response.status, '-', errorText);
+                throw new Error(`Vote submission failed: ${response.status} - ${errorText}`);
+            }
+
+        } catch (error) {
+            console.error('❌ Vote submission error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        }
+    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId, saveVoteToStorage]);
 
     const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
         try {
@@ -1231,7 +1320,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             setError(errorMessage);
             throw new Error(errorMessage);
         }
-    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId]); // 37
+    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId]);
 
     const testNetwork = useCallback(async () => {
         console.log('🧪 Starting network connectivity test...');
@@ -1244,8 +1333,9 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             console.error('❌ Network test failed:', error);
             setError('Network connectivity test failed. Check your internet connection.');
         }
-    }, []); // 38
+    }, []);
 
+    // Initialize app and run cleanup on startup
     useEffect(() => {
         const initializeApp = async () => {
             if (!authContext.state.isAuthenticated) {
@@ -1256,6 +1346,9 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             console.log('🚀 ChatProvider initializing with backend integration...');
             
             try {
+                // ✅ Run cleanup first to remove empty sessions
+                await cleanupEmptySessions();
+                
                 await Promise.all([
                     loadRecentQueries(),
                     refreshChatHistory(),
@@ -1272,10 +1365,11 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
         };
 
         initializeApp();
-    }, [authContext.state.isAuthenticated, loadRecentQueries, refreshChatHistory, loadVotesFromStorage]); // 39
+    }, [authContext.state.isAuthenticated, cleanupEmptySessions, loadRecentQueries, refreshChatHistory, loadVotesFromStorage]);
 
+    // ✅ FIXED: Only auto-save sessions with meaningful content
     useEffect(() => {
-        if (messages.length > 0 && currentSessionId && authContext.state.isAuthenticated) {
+        if (messages.length >= 2 && currentSessionId && authContext.state.isAuthenticated && hasSessionContent(messages)) {
             if (autoSaveTimerRef.current) {
                 clearTimeout(autoSaveTimerRef.current);
             }
@@ -1295,7 +1389,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
                     
                     await enhancedAutoSave(sessionData);
                     
-                    console.log('💾 Session auto-saved with backend integration:', sessionTitle);
+                    console.log('💾 Session auto-saved with meaningful content:', sessionTitle);
                 } catch (error) {
                     console.error('❌ Failed to auto-save session:', error);
                 }
@@ -1306,14 +1400,16 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
                     clearTimeout(autoSaveTimerRef.current);
                 }
             };
+        } else if (messages.length > 0) {
+            console.log('⏭️ Skipping auto-save - session lacks meaningful content');
         }
-    }, [messages, currentSessionId, authContext.state.isAuthenticated, getCurrentUserId, enhancedAutoSave]); // 40
+    }, [messages, currentSessionId, authContext.state.isAuthenticated, getCurrentUserId, enhancedAutoSave, hasSessionContent]);
 
     useEffect(() => {
         if (messages.length > 0 && authContext.state.isAuthenticated) {
             loadVotesFromStorage();
         }
-    }, [messages.length, authContext.state.isAuthenticated, loadVotesFromStorage]); // 41
+    }, [messages.length, authContext.state.isAuthenticated, loadVotesFromStorage]);
 
     useEffect(() => {
         if (!authContext.state.isAuthenticated) {
@@ -1336,7 +1432,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             
             console.log('🧹 Cleared in-memory chat data and timers on logout');
         }
-    }, [authContext.state.isAuthenticated]); // 42
+    }, [authContext.state.isAuthenticated]);
 
     useEffect(() => {
         return () => {
@@ -1347,7 +1443,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
                 clearInterval(statusPollingRef.current);
             }
         };
-    }, []); // 43
+    }, []);
 
     return (
         <ChatContext.Provider value={{
@@ -1372,6 +1468,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             refreshChatHistory,
             clearAllUserData,
             addNewSession,
+            cleanupEmptySessions, // ✅ Added cleanup function to context
         }}>
             {children}
         </ChatContext.Provider>
