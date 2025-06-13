@@ -142,7 +142,6 @@ type ChatContextType = {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
-    // ✅ HOOK ORDER FIXED: All useState hooks FIRST (1-7)
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([]);
@@ -151,15 +150,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // ✅ HOOK ORDER FIXED: All useRef hooks SECOND (8-10)
     const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const statusPollingRef = useRef<NodeJS.Timeout | null>(null);
     const lastAutoSaveRef = useRef<number>(0);
     
-    // ✅ HOOK ORDER FIXED: useAuth hook THIRD (11)
     const authContext = useAuth();
 
-    // ✅ HOOK ORDER FIXED: All useCallback hooks FOURTH (12-47) - EXACT COUNT
+
     const safeApiCall = useCallback(async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
         try {
             return await apiCall();
@@ -1095,8 +1092,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery, getCurrentUserId, extractSourcesFromText]); // 35
 
-    // FIXED submitVote function - Replace ONLY this function in your ChatContext.tsx
-// Keep everything else as is!
 
 const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
     try {
@@ -1119,12 +1114,11 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
 
         const voteUrl = 'https://tgcsbe.iopex.ai/vote';
         
-        // ✅ EXACT WEB APP FORMAT - From your dev tools
         const votePayload = {
-            message_id: aiMessage.id,                    // ✅ Exact match from dev tools
-            user_id: getCurrentUserId(),                 // ✅ Use "7" as shown in dev tools  
-            vote: voteType === 'upvote' ? 1 : -1,       // ✅ 1 for upvote, -1 for downvote
-            session_id: currentSessionId || APP_SESSION_ID // ✅ Include session_id
+            message_id: aiMessage.id,                    
+            user_id: getCurrentUserId(),                 
+            vote: voteType === 'upvote' ? 1 : -1,       
+            session_id: currentSessionId || APP_SESSION_ID 
         };
 
         console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
@@ -1145,7 +1139,6 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
             const responseText = await response.text();
             console.log('✅ Vote SUCCESS! Response:', responseText);
 
-            // Update message to show vote - EXACT WEB APP BEHAVIOR
             setMessages(prev => prev.map(msg => 
                 msg.message === messageText && !msg.isUser ? {
                     ...msg,
@@ -1154,7 +1147,6 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
                 } : msg
             ));
 
-            // Save vote to local storage (keep your existing function)
             await saveVoteToStorage(aiMessage.id, messageText, voteType);
 
             console.log(`✅ ${voteType} submitted successfully`);
@@ -1254,7 +1246,6 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
         }
     }, []); // 38
 
-    // ✅ HOOK ORDER FIXED: All useEffect hooks LAST (39-42)
     useEffect(() => {
         const initializeApp = async () => {
             if (!authContext.state.isAuthenticated) {
