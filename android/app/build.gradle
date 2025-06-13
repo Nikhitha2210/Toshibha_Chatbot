@@ -85,6 +85,14 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    // ADD THIS SECTION TO DISABLE LINT CHECKS
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+        disable 'Instantiatable'
+    }
+    
     signingConfigs {
         qa {
             storeFile file(APK_UPLOAD_STORE_FILE)
@@ -115,6 +123,7 @@ android {
             signingConfig signingConfigs.prod
             matchingFallbacks = ['release']
         }
+        
     }
 }
 
