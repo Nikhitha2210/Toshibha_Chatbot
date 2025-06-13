@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, ReactNode, useContext, useState, useCallback, useEffect, useRef } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import uuid from 'react-native-uuid';
 import { useAuth } from './AuthContext';
@@ -12,8 +12,6 @@ import {
 } from '../config/environment';
 
 const uuidv4 = () => uuid.v4() as string;
-
-// Create a persistent session ID that stays the same for the app session
 const APP_SESSION_ID = 'session-' + uuidv4();
 
 export interface ChatMessage {
@@ -23,7 +21,7 @@ export interface ChatMessage {
     isUser: boolean;
     isStreaming?: boolean;
     agentStatus?: string;
-    sources?: SourceReference[]; // Use SourceReference[] to match MessageCard
+    sources?: SourceReference[];
     hasVoted?: boolean;
     voteType?: 'upvote' | 'downvote';
     feedback?: any;
@@ -40,6 +38,9 @@ export interface ChatSession {
     title: string;
     timestamp: string;
     messages: ChatMessage[];
+    userId: string;
+    creationDate: string;
+    label?: string;
 }
 
 export interface RecentQuery {
@@ -55,11 +56,71 @@ export interface SourceReference {
     url?: string;
 }
 
+export interface VoteData {
+    messageId: string;
+    messageText: string;
+    voteType: 'upvote' | 'downvote';
+    timestamp: string;
+    userId: string;
+}
+
+interface BackendSession {
+    id: string;
+    user_id: string;
+    session_name?: string;
+    created_at: string;
+    updated_at: string;
+    messages?: BackendMessage[];
+    first_message?: string;
+    last_message?: string;
+    message_count?: number;
+}
+
+interface BackendMessage {
+    id: string;
+    session_id: string;
+    content: string;
+    is_user: boolean;
+    created_at: string;
+    vote?: number;
+    feedback?: string;
+}
+
+interface WebAppSessionObject {
+    id: string;
+    label: string;
+    messages: WebAppChatMessageObject[];
+    creationDate: string;
+    summary?: {
+        title: string;
+        problem: string;
+        solution: string;
+        sessionMessageLengthOnLastUpdate?: number;
+        isExpectingDisplay?: boolean;
+    };
+}
+
+interface WebAppChatMessageObject {
+    id: string;
+    userName: string;
+    isBot: boolean;
+    date: string;
+    text: string;
+    vote?: 0 | 1 | -1;
+    feedback?: string;
+    feedbackfiles?: any[];
+    files?: any[];
+    media?: any[];
+    isStreaming?: boolean;
+    agentStatus?: string;
+}
+
 type ChatContextType = {
     messages: ChatMessage[];
     sessions: ChatSession[];
     recentQueries: RecentQuery[];
     currentSessionId: string | null;
+    selectedSession: ChatSession | null;
     addMessage: (message: ChatMessage) => void;
     clearMessages: () => void;
     sendMessage: (text: string) => Promise<void>;
@@ -68,35 +129,45 @@ type ChatContextType = {
     isLoading: boolean;
     startNewSession: () => void;
     loadSession: (sessionId: string) => void;
+    setSelectedSession: (sessionId: string) => void;
     error: string | null;
     clearError: () => void;
     testNetwork: () => Promise<void>;
+    loadUserSessions: () => Promise<ChatSession[]>;
+    refreshChatHistory: () => Promise<void>;
+    clearAllUserData: () => Promise<void>;
+    addNewSession: () => void;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
+    // ✅ HOOK ORDER FIXED: All useState hooks FIRST (1-7)
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+    const [selectedSession, setSelectedSessionState] = useState<ChatSession | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // ✅ HOOK ORDER FIXED: All useRef hooks SECOND (8-10)
+    const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const statusPollingRef = useRef<NodeJS.Timeout | null>(null);
+    const lastAutoSaveRef = useRef<number>(0);
+    
+    // ✅ HOOK ORDER FIXED: useAuth hook THIRD (11)
     const authContext = useAuth();
 
-    // Enhanced API call wrapper with better error handling
-    const safeApiCall = async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
+    // ✅ HOOK ORDER FIXED: All useCallback hooks FOURTH (12-47) - EXACT COUNT
+    const safeApiCall = useCallback(async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
         try {
             return await apiCall();
         } catch (error) {
             console.error('🚨 Safe API Call Error:', error);
-            
             let errorMessage = fallbackError;
-            
             if (error instanceof Error) {
                 errorMessage = error.message;
-                
-                // Enhance error messages for better user understanding
                 if (error.message.includes('Network request failed')) {
                     errorMessage = 'Cannot connect to server. Please check your internet connection.';
                 } else if (error.message.includes('timeout')) {
@@ -107,21 +178,530 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     errorMessage = 'Server error. Please try again later.';
                 }
             }
-            
             setError(errorMessage);
             throw new Error(errorMessage);
         }
-    };
+    }, []); // 12
+
+    const getCurrentUserId = useCallback(() => {
+        const userData = authContext.state.user;
+        return String((userData as any)?.id || (userData as any)?.user_id || "7");
+    }, [authContext]); // 13
+
+    const fetchChatHistoryFromBackend = useCallback(async (): Promise<ChatSession[]> => {
+        try {
+            console.log('🌐 Fetching chat history from backend...');
+            
+            const token = authContext.state.tokens?.access_token;
+            const userId = getCurrentUserId();
+            
+            if (!token) {
+                console.log('❌ No token available for chat history');
+                return [];
+            }
+
+            const possibleUrls = [
+                `https://tgcsbe.iopex.ai/pastSessions?uid=${userId}`,
+                `https://tgcsbe.iopex.ai/api/sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/api/chat/sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/chat/sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/api/user-sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/user-sessions?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/api/conversations?user_id=${userId}`,
+                `https://tgcsbe.iopex.ai/conversations?user_id=${userId}`,
+            ];
+
+            for (const url of possibleUrls) {
+                try {
+                    console.log(`🔍 Testing chat history endpoint: ${url}`);
+                    
+                    const response = await safeFetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                        },
+                    });
+
+                    console.log(`📊 ${url} - Status: ${response.status}`);
+
+                    if (response.ok) {
+                        const responseText = await response.text();
+                        console.log(`✅ Found working endpoint: ${url}`);
+                        console.log(`📄 Response preview:`, responseText.substring(0, 300));
+                        
+                        try {
+                            const chatHistory = JSON.parse(responseText);
+                            console.log(`🎉 Successfully parsed chat history from backend`);
+                            
+                            const convertedSessions = convertBackendChatHistory(chatHistory, userId);
+                            console.log(`✅ Converted ${convertedSessions.length} sessions from backend`);
+                            
+                            return convertedSessions;
+                        } catch (parseError) {
+                            console.log(`⚠️ Could not parse JSON from ${url}:`, parseError);
+                            continue;
+                        }
+                    } else if (response.status === 404) {
+                        console.log(`❌ ${url} - Not found (404)`);
+                    } else if (response.status === 401) {
+                        console.log(`❌ ${url} - Unauthorized (401)`);
+                    } else {
+                        console.log(`❌ ${url} - Error: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.log(`💥 ${url} - Exception:`, error);
+                }
+            }
+            
+            console.log('❌ No working chat history endpoint found');
+            return [];
+            
+        } catch (error) {
+            console.error('❌ Failed to fetch chat history from backend:', error);
+            return [];
+        }
+    }, [authContext, getCurrentUserId]); // 14
+
+    const convertBackendChatHistory = useCallback((backendData: any, userId: string): ChatSession[] => {
+        try {
+            console.log('🔄 Converting backend chat history format...');
+            
+            let chatArray = backendData;
+            
+            if (backendData.sessions) {
+                chatArray = backendData.sessions;
+            } else if (backendData.conversations) {
+                chatArray = backendData.conversations;
+            } else if (backendData.chats) {
+                chatArray = backendData.chats;
+            } else if (backendData.data) {
+                chatArray = backendData.data;
+            } else if (!Array.isArray(backendData)) {
+                console.log('⚠️ Unexpected backend format, trying to convert single object');
+                chatArray = [backendData];
+            }
+
+            if (!Array.isArray(chatArray)) {
+                console.log('❌ Backend data is not convertible to array:', chatArray);
+                return [];
+            }
+
+            const convertedSessions: ChatSession[] = chatArray.map((item: BackendSession, index: number) => {
+                const sessionId = item.id || `backend-session-${index}`;
+                const title = item.session_name || item.first_message?.substring(0, 50) || `Chat ${index + 1}`;
+                const timestamp = item.created_at || item.updated_at || new Date().toISOString();
+                const creationDate = item.created_at || timestamp;
+                
+                let messages: ChatMessage[] = [];
+                
+                if (item.messages && Array.isArray(item.messages)) {
+                    messages = item.messages.map((msg: BackendMessage, msgIndex: number) => {
+                        const messageId = msg.id || `msg-${sessionId}-${msgIndex}`;
+                        return {
+                            id: messageId,
+                            time: new Date(msg.created_at || timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            message: msg.content || '',
+                            isUser: msg.is_user || false,
+                            sources: [],
+                            hasVoted: msg.vote !== undefined && msg.vote !== null && msg.vote !== 0,
+                            voteType: msg.vote === 1 ? 'upvote' as const : msg.vote === -1 ? 'downvote' as const : undefined,
+                            feedback: msg.feedback,
+                            highlight: {
+                                title: msg.is_user ? "Your Query" : "AI Response",
+                                rating: msg.is_user ? 0 : 4.8,
+                                reviews: msg.is_user ? 0 : 8399,
+                                description: msg.content || ''
+                            }
+                        };
+                    });
+                } else if (item.first_message || item.last_message) {
+                    if (item.first_message) {
+                        messages.push({
+                            id: `${sessionId}-first`,
+                            time: new Date(creationDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            message: item.first_message,
+                            isUser: true,
+                            sources: [],
+                            highlight: {
+                                title: "Your Query",
+                                rating: 0,
+                                reviews: 0,
+                                description: item.first_message
+                            }
+                        });
+                    }
+                    
+                    if (item.last_message && item.last_message !== item.first_message) {
+                        messages.push({
+                            id: `${sessionId}-last`,
+                            time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            message: item.last_message,
+                            isUser: false,
+                            sources: [],
+                            highlight: {
+                                title: "AI Response",
+                                rating: 4.8,
+                                reviews: 8399,
+                                description: item.last_message
+                            }
+                        });
+                    }
+                }
+
+                return {
+                    id: sessionId,
+                    title: title,
+                    timestamp: timestamp,
+                    creationDate: creationDate,
+                    messages: messages,
+                    userId: userId,
+                    label: title
+                };
+            });
+
+            convertedSessions.sort((a, b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime());
+
+            console.log(`✅ Converted ${convertedSessions.length} chat sessions from backend`);
+            return convertedSessions;
+            
+        } catch (error) {
+            console.error('❌ Error converting backend chat history:', error);
+            return [];
+        }
+    }, []); // 15
+
+    const saveSessionToBackend = useCallback(async (session: ChatSession) => {
+        try {
+            console.log('💾 Saving session to backend database (Web App Compatible)...');
+            
+            const token = authContext.state.tokens?.access_token;
+            const userId = getCurrentUserId();
+            
+            if (!token) {
+                console.log('❌ No token for backend session save');
+                return false;
+            }
+
+            const webAppSession: WebAppSessionObject = {
+                id: session.id,
+                label: session.title,
+                creationDate: session.creationDate || session.timestamp,
+                messages: session.messages.map(msg => ({
+                    id: msg.id,
+                    userName: userId,
+                    isBot: !msg.isUser,
+                    date: new Date().toISOString(),
+                    text: msg.message,
+                    vote: msg.hasVoted ? (msg.voteType === 'upvote' ? 1 : (msg.voteType === 'downvote' ? -1 : 0)) : 0,
+                    feedback: msg.feedback || '',
+                    feedbackfiles: undefined,
+                    files: undefined,
+                    media: undefined,
+                    isStreaming: false
+                }))
+            };
+
+            console.log('📤 Web App Session Format:', JSON.stringify(webAppSession, null, 2));
+
+            const possibleSaveUrls = [
+                'https://tgcsbe.iopex.ai/api/sessions',
+                'https://tgcsbe.iopex.ai/sessions', 
+                'https://tgcsbe.iopex.ai/api/chat/sessions',
+                'https://tgcsbe.iopex.ai/chat/sessions',
+                'https://tgcsbe.iopex.ai/api/chat/save-session',
+                'https://tgcsbe.iopex.ai/chat/save-session',
+                'https://tgcsbe.iopex.ai/saveSession',
+                'https://tgcsbe.iopex.ai/api/saveSession',
+                'https://tgcsbe.iopex.ai/api/conversations',
+                'https://tgcsbe.iopex.ai/conversations',
+                'https://tgcsbe.iopex.ai/api/user-sessions',
+                'https://tgcsbe.iopex.ai/user-sessions',
+            ];
+
+            const payloadFormats = [
+                webAppSession,
+                { session: webAppSession },
+                { 
+                    userId: userId,
+                    session: webAppSession 
+                },
+                {
+                    sessionId: session.id,
+                    userId: userId,
+                    label: session.title,
+                    creationDate: session.creationDate || session.timestamp,
+                    messages: webAppSession.messages
+                },
+                {
+                    id: session.id,
+                    user_id: userId,
+                    session_name: session.title,
+                    created_at: session.creationDate || session.timestamp,
+                    updated_at: new Date().toISOString(),
+                    messages: webAppSession.messages
+                }
+            ];
+
+            for (const url of possibleSaveUrls) {
+                for (let i = 0; i < payloadFormats.length; i++) {
+                    try {
+                        console.log(`🔍 Testing session save: ${url} with format ${i + 1}`);
+                        
+                        const response = await safeFetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify(payloadFormats[i])
+                        });
+
+                        console.log(`📊 ${url} - Status: ${response.status}`);
+
+                        if (response.ok) {
+                            const responseText = await response.text();
+                            console.log(`✅ Session saved to backend: ${url} with format ${i + 1}`);
+                            console.log(`📄 Save response:`, responseText.substring(0, 300));
+                            return true;
+                        } else if (response.status === 404) {
+                            console.log(`❌ ${url} - Not found (404)`);
+                        } else if (response.status === 401) {
+                            console.log(`❌ ${url} - Unauthorized (401)`);
+                        } else {
+                            const errorText = await response.text();
+                            console.log(`❌ ${url} - Error: ${response.status} - ${errorText.substring(0, 100)}`);
+                        }
+                    } catch (error) {
+                        console.log(`💥 ${url} - Exception:`, error);
+                    }
+                }
+            }
+            
+            console.log('❌ No working session save endpoint found');
+            return false;
+            
+        } catch (error) {
+            console.error('❌ Failed to save session to backend:', error);
+            return false;
+        }
+    }, [authContext, getCurrentUserId]); // 16
+
+    const saveVoteToStorage = useCallback(async (messageId: string, messageText: string, voteType: 'upvote' | 'downvote') => {
+        try {
+            const userId = getCurrentUserId();
+            const existingVotesStr = await AsyncStorage.getItem(`user_votes_${userId}`);
+            const existingVotes = existingVotesStr ? JSON.parse(existingVotesStr) : [];
+            
+            const voteData: VoteData = {
+                messageId,
+                messageText: messageText.substring(0, 100),
+                voteType,
+                timestamp: new Date().toISOString(),
+                userId
+            };
+            
+            const filteredVotes = existingVotes.filter((vote: VoteData) => vote.messageId !== messageId);
+            filteredVotes.push(voteData);
+            
+            await AsyncStorage.setItem(`user_votes_${userId}`, JSON.stringify(filteredVotes));
+            console.log('💾 Vote saved to local storage');
+            
+        } catch (error) {
+            console.error('Failed to save vote to storage:', error);
+        }
+    }, [getCurrentUserId]); // 17
+
+    const loadVotesFromStorage = useCallback(async () => {
+        try {
+            const userId = getCurrentUserId();
+            const votesStr = await AsyncStorage.getItem(`user_votes_${userId}`);
+            if (votesStr) {
+                const votes: VoteData[] = JSON.parse(votesStr);
+                console.log('📥 Loaded votes from storage:', votes.length);
+                
+                setMessages(prev => prev.map(msg => {
+                    if (!msg.isUser) {
+                        const savedVote = votes.find(vote => 
+                            vote.messageId === msg.id || 
+                            vote.messageText === msg.message.substring(0, 100)
+                        );
+                        if (savedVote) {
+                            return {
+                                ...msg,
+                                hasVoted: true,
+                                voteType: savedVote.voteType
+                            };
+                        }
+                    }
+                    return msg;
+                }));
+                
+                return votes;
+            }
+        } catch (error) {
+            console.error('Failed to load votes from storage:', error);
+        }
+        return [];
+    }, [getCurrentUserId]); // 18
+
+    const saveSessionToStorage = useCallback(async (session: ChatSession) => {
+        try {
+            const now = Date.now();
+            if (now - lastAutoSaveRef.current < 10000) {
+                return;
+            }
+            lastAutoSaveRef.current = now;
+
+            const userId = getCurrentUserId();
+            await AsyncStorage.setItem(`session_${session.id}`, JSON.stringify(session));
+            
+            const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
+            const userSessions = userSessionsStr ? JSON.parse(userSessionsStr) : [];
+            
+            const filteredSessions = userSessions.filter((s: any) => s.id !== session.id);
+            filteredSessions.unshift({
+                id: session.id,
+                title: session.title,
+                timestamp: session.timestamp,
+                creationDate: session.creationDate,
+                userId: session.userId
+            });
+            
+            const limitedSessions = filteredSessions.slice(0, 50);
+            await AsyncStorage.setItem(`user_sessions_${userId}`, JSON.stringify(limitedSessions));
+            console.log('💾 Session saved to storage:', session.title);
+            
+        } catch (error) {
+            console.error('Failed to save session to storage:', error);
+        }
+    }, [getCurrentUserId]); // 19
+
+    const loadUserSessions = useCallback(async (): Promise<ChatSession[]> => {
+        try {
+            const userId = getCurrentUserId();
+            const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
+            if (userSessionsStr) {
+                const sessionList = JSON.parse(userSessionsStr);
+                console.log('📥 Found user session list:', sessionList.length);
+                
+                const fullSessions: ChatSession[] = [];
+                
+                for (const sessionRef of sessionList) {
+                    try {
+                        const sessionStr = await AsyncStorage.getItem(`session_${sessionRef.id}`);
+                        if (sessionStr) {
+                            const fullSession = JSON.parse(sessionStr);
+                            fullSessions.push(fullSession);
+                        }
+                    } catch (error) {
+                        console.log(`Failed to load session ${sessionRef.id}:`, error);
+                    }
+                }
+                
+                console.log('✅ Loaded local sessions:', fullSessions.length);
+                return fullSessions;
+            }
+        } catch (error) {
+            console.error('Failed to load user sessions:', error);
+        }
+        return [];
+    }, [getCurrentUserId]); // 20
+
+    const refreshChatHistory = useCallback(async () => {
+        try {
+            console.log('🔄 Refreshing chat history from backend + local...');
+            setError(null);
+            
+            const [backendSessions, localSessions] = await Promise.all([
+                fetchChatHistoryFromBackend(),
+                loadUserSessions()
+            ]);
+            
+            const allSessions = [...backendSessions, ...localSessions];
+            
+            const uniqueSessions = allSessions.filter((session, index, self) => 
+                index === self.findIndex(s => 
+                    s.id === session.id || 
+                    (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
+                )
+            );
+            
+            uniqueSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
+            
+            console.log(`📊 Total sessions: ${uniqueSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length})`);
+            
+            setSessions(uniqueSessions);
+            console.log('✅ Chat history refreshed successfully');
+            
+        } catch (error) {
+            console.error('❌ Failed to refresh chat history:', error);
+            setError('Failed to refresh chat history');
+        }
+    }, [fetchChatHistoryFromBackend, loadUserSessions]); // 21
+
+    const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
+        try {
+            await saveSessionToStorage(sessionData);
+            
+            const backendSaved = await saveSessionToBackend(sessionData);
+            
+            if (backendSaved) {
+                console.log('✅ Session saved to BOTH local and backend database');
+            } else {
+                console.log('⚠️ Session saved locally only (backend save failed)');
+            }
+            
+            setSessions(prev => {
+                const filtered = prev.filter(s => s.id !== sessionData.id);
+                return [sessionData, ...filtered];
+            });
+            
+        } catch (error) {
+            console.error('❌ Enhanced auto-save failed:', error);
+        }
+    }, [saveSessionToStorage, saveSessionToBackend]); // 22
+
+    const clearAllUserData = useCallback(async () => {
+        try {
+            const userId = getCurrentUserId();
+            
+            await AsyncStorage.removeItem(`user_votes_${userId}`);
+            
+            const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
+            if (userSessionsStr) {
+                const sessionList = JSON.parse(userSessionsStr);
+                for (const sessionRef of sessionList) {
+                    await AsyncStorage.removeItem(`session_${sessionRef.id}`);
+                }
+            }
+            await AsyncStorage.removeItem(`user_sessions_${userId}`);
+            await AsyncStorage.removeItem('recent_queries');
+            
+            setSessions([]);
+            setRecentQueries([]);
+            setMessages([]);
+            setCurrentSessionId(null);
+            setSelectedSessionState(null);
+            
+            console.log('🗑️ All user data cleared');
+            
+        } catch (error) {
+            console.error('Failed to clear user data:', error);
+        }
+    }, [getCurrentUserId]); // 23
 
     const addMessage = useCallback((message: ChatMessage) => {
         try {
             setMessages(prev => [...prev, message]);
-            setError(null); // Clear any previous errors
+            setError(null);
         } catch (error) {
             console.error('Error adding message:', error);
             setError('Failed to add message');
         }
-    }, []);
+    }, []); // 24
 
     const clearMessages = useCallback(() => {
         try {
@@ -131,11 +711,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error clearing messages:', error);
             setError('Failed to clear messages');
         }
-    }, []);
+    }, []); // 25
 
     const clearError = useCallback(() => {
         setError(null);
-    }, []);
+    }, []); // 26
 
     const updateMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
         try {
@@ -146,7 +726,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error updating message:', error);
             setError('Failed to update message');
         }
-    }, []);
+    }, []); // 27
 
     const saveRecentQuery = useCallback(async (queryText: string) => {
         try {
@@ -160,16 +740,15 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 .filter((query, index, self) => 
                     index === self.findIndex(q => q.message.toLowerCase() === query.message.toLowerCase())
                 )
-                .slice(0, 10); // Keep only last 10 unique queries
+                .slice(0, 10);
 
             setRecentQueries(updatedQueries);
             await AsyncStorage.setItem('recent_queries', JSON.stringify(updatedQueries));
             console.log('✅ Recent query saved:', queryText);
         } catch (error) {
             console.error('Error saving recent query:', error);
-            // Don't throw error for recent queries - it's not critical
         }
-    }, [recentQueries]);
+    }, [recentQueries]); // 28
 
     const loadRecentQueries = useCallback(async () => {
         try {
@@ -181,29 +760,31 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error('Error loading recent queries:', error);
-            // Don't throw - not critical
         }
-    }, []);
+    }, []); // 29
 
     const startNewSession = useCallback(() => {
         try {
-            // Save current session if it has messages
             if (messages.length > 0 && currentSessionId) {
                 const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'New Chat';
                 const newSession: ChatSession = {
                     id: currentSessionId,
                     title: sessionTitle,
                     timestamp: new Date().toISOString(),
-                    messages: [...messages]
+                    creationDate: new Date().toISOString(),
+                    messages: [...messages],
+                    userId: getCurrentUserId(),
+                    label: sessionTitle
                 };
                 
+                enhancedAutoSave(newSession);
                 setSessions(prev => [newSession, ...prev.filter(s => s.id !== currentSessionId)]);
                 console.log('✅ Session saved:', sessionTitle);
             }
             
-            // Start new session
             const newSessionId = uuidv4();
             setCurrentSessionId(newSessionId);
+            setSelectedSessionState(null);
             clearMessages();
             clearError();
             console.log('✅ New session started:', newSessionId);
@@ -211,15 +792,21 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error starting new session:', error);
             setError('Failed to start new session');
         }
-    }, [messages, currentSessionId, clearMessages, clearError]);
+    }, [messages, currentSessionId, clearMessages, clearError, getCurrentUserId, enhancedAutoSave]); // 30
+
+    const addNewSession = useCallback(() => {
+        startNewSession();
+    }, [startNewSession]); // 31
 
     const loadSession = useCallback((sessionId: string) => {
         try {
             const session = sessions.find(s => s.id === sessionId);
             if (session) {
                 setCurrentSessionId(sessionId);
+                setSelectedSessionState(session);
                 setMessages(session.messages);
                 clearError();
+                loadVotesFromStorage();
                 console.log('✅ Session loaded:', session.title);
             } else {
                 setError('Session not found');
@@ -228,21 +815,21 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error loading session:', error);
             setError('Failed to load session');
         }
-    }, [sessions, clearError]);
+    }, [sessions, clearError, loadVotesFromStorage]); // 32
 
-    // Helper function to extract sources from response text
-    const extractSourcesFromText = (text: string): SourceReference[] => {
+    const setSelectedSession = useCallback((sessionId: string) => {
+        loadSession(sessionId);
+    }, [loadSession]); // 33
+
+    const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
         try {
             const sources: SourceReference[] = [];
             
-            // Pattern 1: [aws_id: filename_page_1]
             const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/g;
             let match;
             
             while ((match = awsIdPattern.exec(text)) !== null) {
                 const awsLink = match[1].trim();
-                
-                // Extract filename and page from aws_id
                 const parts = awsLink.split('_page_');
                 if (parts.length >= 2) {
                     const filename = parts[0].replace(/_/g, ' ');
@@ -252,31 +839,28 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         filename: filename,
                         pages: pageNum,
                         awsLink: awsLink,
-                        url: getImageUrl(awsLink) // Use environment config
+                        url: getImageUrl(awsLink)
                     });
                 }
             }
             
-            // Pattern 2: Source: filename page X [aws_id: ...]
             const sourcePattern = /Source:\s*([^[]+)\[aws_id:\s*([^\]]+)\]/g;
             while ((match = sourcePattern.exec(text)) !== null) {
                 const sourceText = match[1].trim();
                 const awsLink = match[2].trim();
                 
-                // Extract filename and page from source text
                 const pageMatch = sourceText.match(/(.+?)\s+page\s+(\d+)/i);
                 if (pageMatch) {
                     const filename = pageMatch[1].trim();
                     const pageNum = pageMatch[2];
                     
-                    // Check if we already have this source
                     const existingSource = sources.find(s => s.awsLink === awsLink);
                     if (!existingSource) {
                         sources.push({
                             filename: filename,
                             pages: pageNum,
                             awsLink: awsLink,
-                            url: getImageUrl(awsLink) // Use environment config
+                            url: getImageUrl(awsLink)
                         });
                     }
                 }
@@ -288,7 +872,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error extracting sources:', error);
             return [];
         }
-    };
+    }, []); // 34
 
     const sendMessage = useCallback(async (text: string) => {
         if (!text.trim() || isLoading) {
@@ -298,17 +882,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         console.log('=== 🚀 STARTING SEND MESSAGE ===');
         console.log('📝 Message text:', text);
-        console.log('📱 Session ID:', APP_SESSION_ID);
 
         try {
-            // Start new session if no current session
             if (!currentSessionId) {
                 const newSessionId = uuidv4();
                 setCurrentSessionId(newSessionId);
                 console.log('🆕 Created new session:', newSessionId);
             }
 
-            // Validate session before sending message
             const isSessionValid = await authContext.validateSessionBeforeRequest();
             if (!isSessionValid) {
                 throw new Error('Session expired. Please log in again.');
@@ -317,10 +898,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             setIsLoading(true);
             setError(null);
 
-            // Save as recent query
             await saveRecentQuery(text);
 
-            // Add user message immediately
             const userMessage: ChatMessage = {
                 id: uuidv4(),
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -337,7 +916,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             addMessage(userMessage);
 
-            // Add AI message placeholder
             const aiMessageId = uuidv4();
             const aiMessage: ChatMessage = {
                 id: aiMessageId,
@@ -357,9 +935,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             addMessage(aiMessage);
 
-            // Get token and user data
             const token = authContext.state.tokens?.access_token;
-            const userData = authContext.state.user;
 
             if (!token) {
                 throw new Error('No authentication token available');
@@ -368,7 +944,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const requestBody = {
                 query: text,
                 qid: uuidv4(),
-                uid: (userData as any)?.id || (userData as any)?.user_id || (userData as any)?.userId || (userData as any)?.uid || 'user-' + uuidv4(),
+                uid: getCurrentUserId(),
                 sid: APP_SESSION_ID,
                 messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
                     content: msg.message,
@@ -379,23 +955,16 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const chatUrl = getChatApiUrl('/run');
             console.log('📡 Sending chat request to:', chatUrl);
-            console.log('📤 Request body:', requestBody);
-
-            // Start status polling
-            let statusPollingInterval: NodeJS.Timeout | null = null;
 
             const startStatusPolling = () => {
                 const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${APP_SESSION_ID}`);
-                console.log('🔄 Starting status polling:', statusUrl);
                 
-                statusPollingInterval = setInterval(async () => {
+                statusPollingRef.current = setInterval(async () => {
                     try {
                         const statusResponse = await safeFetch(statusUrl);
                         if (statusResponse.ok) {
                             const statusText = await statusResponse.text();
-                            console.log('📊 Status response:', statusText);
                             
-                            // Parse SSE format: data: {"status": "..."}
                             const lines = statusText.split('\n');
                             for (const line of lines) {
                                 if (line.startsWith('data: ')) {
@@ -406,10 +975,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                                                 agentStatus: data.status,
                                                 isStreaming: true
                                             });
-                                            console.log('📊 Status update:', data.status);
                                         }
                                     } catch (parseError) {
-                                        console.log('⚠️ Status parse error:', parseError);
+                                        console.log('⚠️ Status parse error (normal):', parseError);
                                     }
                                 }
                             }
@@ -417,18 +985,17 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     } catch (statusError) {
                         console.log('⚠️ Status polling error:', statusError);
                     }
-                }, 2000); // Poll every 2 seconds
+                }, 3000);
             };
 
             const stopStatusPolling = () => {
-                if (statusPollingInterval) {
-                    clearInterval(statusPollingInterval);
-                    statusPollingInterval = null;
+                if (statusPollingRef.current) {
+                    clearInterval(statusPollingRef.current);
+                    statusPollingRef.current = null;
                     console.log('🛑 Status polling stopped');
                 }
             };
 
-            // Start status polling
             startStatusPolling();
 
             const response = await safeApiCall(async () => {
@@ -452,51 +1019,41 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             console.log('✅ Chat response received');
             
-            // Get the response text
             const responseText = await response.text();
             console.log('📝 Full response length:', responseText.length);
-            console.log('📝 Response preview:', responseText.substring(0, 200) + '...');
 
             let fullMessage = '';
             let extractedSources: SourceReference[] = [];
 
-            // Parse response
             if (responseText) {
-                // Try to parse as JSON first
                 try {
                     const jsonResponse = JSON.parse(responseText);
                     fullMessage = jsonResponse.message || jsonResponse.response || jsonResponse.text || responseText;
                 } catch {
-                    // If not JSON, use as plain text
                     fullMessage = responseText;
                 }
 
                 extractedSources = extractSourcesFromText(fullMessage);
-                console.log('📋 Extracted sources count:', extractedSources.length);
                 
-                // Simulate streaming for better UX
                 const words = fullMessage.split(' ');
-                for (let i = 0; i < words.length; i += 3) { // Process 3 words at a time
+                for (let i = 0; i < words.length; i += 3) {
                     const chunk = words.slice(0, i + 3).join(' ');
                     updateMessage(aiMessageId, {
                         message: chunk,
                         isStreaming: true
                     });
                     
-                    // Small delay for streaming effect
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
 
-            // Stop status polling
             stopStatusPolling();
 
-            // Finalize message
             updateMessage(aiMessageId, {
                 message: fullMessage,
                 isStreaming: false,
                 agentStatus: undefined,
-                sources: extractedSources, // Pass SourceReference[] directly
+                sources: extractedSources,
                 highlight: {
                     title: "AI Response",
                     rating: 4.8,
@@ -510,17 +1067,21 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('❌ Send message error:', error);
             
+            if (statusPollingRef.current) {
+                clearInterval(statusPollingRef.current);
+                statusPollingRef.current = null;
+            }
+            
             const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
             setError(errorMessage);
             
-            // Update AI message with error
             const aiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
             if (aiMessages.length > 0) {
                 updateMessage(aiMessages[0].id, {
                     message: `Error: ${errorMessage}`,
                     isStreaming: false,
                     agentStatus: undefined,
-                    sources: [], // Empty SourceReference array
+                    sources: [],
                     highlight: {
                         title: "Error",
                         rating: 0,
@@ -532,45 +1093,59 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery]);
+    }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery, getCurrentUserId, extractSourcesFromText]); // 35
 
-    const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
-        try {
-            console.log(`🗳️ Submitting ${voteType} for message`);
-            
-            const isSessionValid = await authContext.validateSessionBeforeRequest();
-            if (!isSessionValid) {
-                throw new Error('Session expired. Please log in again.');
-            }
+    // FIXED submitVote function - Replace ONLY this function in your ChatContext.tsx
+// Keep everything else as is!
 
-            const token = authContext.state.tokens?.access_token;
-            const userData = authContext.state.user;
+const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
+    try {
+        console.log(`🗳️ Submitting ${voteType} for message`);
+        
+        const isSessionValid = await authContext.validateSessionBeforeRequest();
+        if (!isSessionValid) {
+            throw new Error('Session expired. Please log in again.');
+        }
 
-            const voteUrl = getChatApiUrl('/vote');
-            
-            await safeApiCall(async () => {
-                const response = await safeFetch(voteUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        message: messageText,
-                        vote: voteType,
-                        uid: (userData as any)?.id || 'user-' + uuidv4(),
-                        sid: APP_SESSION_ID
-                    }),
-                });
+        const token = authContext.state.tokens?.access_token;
 
-                if (!response.ok) {
-                    throw new Error(`Vote submission failed: ${response.status}`);
-                }
+        const aiMessage = messages.find(msg => 
+            !msg.isUser && msg.message === messageText
+        );
 
-                return response;
-            });
+        if (!aiMessage) {
+            throw new Error('Message not found for voting');
+        }
 
-            // Update message to show vote
+        const voteUrl = 'https://tgcsbe.iopex.ai/vote';
+        
+        // ✅ EXACT WEB APP FORMAT - From your dev tools
+        const votePayload = {
+            message_id: aiMessage.id,                    // ✅ Exact match from dev tools
+            user_id: getCurrentUserId(),                 // ✅ Use "7" as shown in dev tools  
+            vote: voteType === 'upvote' ? 1 : -1,       // ✅ 1 for upvote, -1 for downvote
+            session_id: currentSessionId || APP_SESSION_ID // ✅ Include session_id
+        };
+
+        console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
+
+        const response = await fetch(voteUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(votePayload),
+        });
+
+        console.log('🗳️ Vote response status:', response.status);
+
+        if (response.ok) {
+            const responseText = await response.text();
+            console.log('✅ Vote SUCCESS! Response:', responseText);
+
+            // Update message to show vote - EXACT WEB APP BEHAVIOR
             setMessages(prev => prev.map(msg => 
                 msg.message === messageText && !msg.isUser ? {
                     ...msg,
@@ -579,16 +1154,25 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 } : msg
             ));
 
+            // Save vote to local storage (keep your existing function)
+            await saveVoteToStorage(aiMessage.id, messageText, voteType);
+
             console.log(`✅ ${voteType} submitted successfully`);
             clearError();
-
-        } catch (error) {
-            console.error('Vote submission error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
-            setError(errorMessage);
-            throw new Error(errorMessage);
+            
+        } else {
+            const errorText = await response.text();
+            console.log('❌ Vote failed:', response.status, '-', errorText);
+            throw new Error(`Vote submission failed: ${response.status} - ${errorText}`);
         }
-    }, [authContext, clearError]);
+
+    } catch (error) {
+        console.error('❌ Vote submission error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+    }
+}, [authContext, clearError, messages, currentSessionId, getCurrentUserId, saveVoteToStorage]); // 36
 
     const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
         try {
@@ -600,33 +1184,45 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const token = authContext.state.tokens?.access_token;
-            const userData = authContext.state.user;
 
-            const feedbackUrl = getChatApiUrl('/feedback');
+            const aiMessage = messages.find(msg => 
+                !msg.isUser && msg.message === messageText
+            );
 
-            await safeApiCall(async () => {
-                const response = await safeFetch(feedbackUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        message: messageText,
-                        feedback,
-                        uid: (userData as any)?.id || 'user-' + uuidv4(),
-                        sid: APP_SESSION_ID
-                    }),
-                });
+            if (!aiMessage) {
+                throw new Error('Message not found for feedback');
+            }
 
-                if (!response.ok) {
-                    throw new Error(`Feedback submission failed: ${response.status}`);
-                }
+            const feedbackUrl = 'https://tgcsbe.iopex.ai/feedback';
 
-                return response;
+            const requestBody = {
+                message_id: aiMessage.id,
+                user_id: getCurrentUserId(),
+                feedback: typeof feedback === 'string' ? feedback : JSON.stringify(feedback),
+                session_id: currentSessionId || APP_SESSION_ID
+            };
+
+            console.log('📝 Feedback request body:', JSON.stringify(requestBody, null, 2));
+
+            const response = await safeFetch(feedbackUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
             });
 
-            // Update message to show feedback submitted
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.log('❌ Feedback error response:', errorText);
+                throw new Error(`Feedback submission failed: ${response.status} - ${errorText}`);
+            }
+
+            const responseText = await response.text();
+            console.log('✅ Feedback response body:', responseText);
+
             setMessages(prev => prev.map(msg => 
                 msg.message === messageText && !msg.isUser ? {
                     ...msg,
@@ -638,14 +1234,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             clearError();
 
         } catch (error) {
-            console.error('Feedback submission error:', error);
+            console.error('❌ Feedback submission error:', error);
             const errorMessage = error instanceof Error ? error.message : 'Failed to submit feedback';
             setError(errorMessage);
             throw new Error(errorMessage);
         }
-    }, [authContext, clearError]);
+    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId]); // 37
 
-    // Network testing function
     const testNetwork = useCallback(async () => {
         console.log('🧪 Starting network connectivity test...');
         setError(null);
@@ -657,48 +1252,111 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             console.error('❌ Network test failed:', error);
             setError('Network connectivity test failed. Check your internet connection.');
         }
-    }, []);
+    }, []); // 38
 
-    // Load recent queries on mount
+    // ✅ HOOK ORDER FIXED: All useEffect hooks LAST (39-42)
     useEffect(() => {
-        console.log('🚀 ChatProvider initializing...');
-        loadRecentQueries();
-        
-        // Test network connectivity on startup (optional)
-        // testNetwork();
-        
-        console.log('📱 App Session ID:', APP_SESSION_ID);
-        console.log('⚙️ API Configuration:', API_CONFIG);
-    }, [loadRecentQueries]);
+        const initializeApp = async () => {
+            if (!authContext.state.isAuthenticated) {
+                console.log('⏭️ Skipping initialization - user not authenticated');
+                return;
+            }
 
-    // Auto-save sessions periodically
+            console.log('🚀 ChatProvider initializing with backend integration...');
+            
+            try {
+                await Promise.all([
+                    loadRecentQueries(),
+                    refreshChatHistory(),
+                    loadVotesFromStorage()
+                ]);
+                
+                console.log('✅ All user data loaded successfully');
+            } catch (error) {
+                console.error('❌ Failed to load user data:', error);
+                setError('Failed to load user data');
+            }
+            
+            console.log('📱 App Session ID:', APP_SESSION_ID);
+        };
+
+        initializeApp();
+    }, [authContext.state.isAuthenticated, loadRecentQueries, refreshChatHistory, loadVotesFromStorage]); // 39
+
     useEffect(() => {
-        if (messages.length > 0 && currentSessionId) {
-            const saveSession = async () => {
+        if (messages.length > 0 && currentSessionId && authContext.state.isAuthenticated) {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+
+            autoSaveTimerRef.current = setTimeout(async () => {
                 try {
                     const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'Chat Session';
-                    const sessionData = {
+                    const sessionData: ChatSession = {
                         id: currentSessionId,
                         title: sessionTitle,
                         timestamp: new Date().toISOString(),
-                        messages: messages
+                        creationDate: new Date().toISOString(),
+                        messages: messages,
+                        userId: getCurrentUserId(),
+                        label: sessionTitle
                     };
                     
-                    await AsyncStorage.setItem(`session_${currentSessionId}`, JSON.stringify(sessionData));
-                    console.log('💾 Session auto-saved:', sessionTitle);
+                    await enhancedAutoSave(sessionData);
+                    
+                    console.log('💾 Session auto-saved with backend integration:', sessionTitle);
                 } catch (error) {
                     console.error('❌ Failed to auto-save session:', error);
                 }
-            };
+            }, 15000);
 
-            // Auto-save every 30 seconds if there are messages
-            const autoSaveInterval = setInterval(saveSession, 30000);
-            
             return () => {
-                clearInterval(autoSaveInterval);
+                if (autoSaveTimerRef.current) {
+                    clearTimeout(autoSaveTimerRef.current);
+                }
             };
         }
-    }, [messages, currentSessionId]);
+    }, [messages, currentSessionId, authContext.state.isAuthenticated, getCurrentUserId, enhancedAutoSave]); // 40
+
+    useEffect(() => {
+        if (messages.length > 0 && authContext.state.isAuthenticated) {
+            loadVotesFromStorage();
+        }
+    }, [messages.length, authContext.state.isAuthenticated, loadVotesFromStorage]); // 41
+
+    useEffect(() => {
+        if (!authContext.state.isAuthenticated) {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+                autoSaveTimerRef.current = null;
+            }
+            if (statusPollingRef.current) {
+                clearInterval(statusPollingRef.current);
+                statusPollingRef.current = null;
+            }
+
+            setSessions([]);
+            setRecentQueries([]);
+            setMessages([]);
+            setCurrentSessionId(null);
+            setSelectedSessionState(null);
+            setError(null);
+            setIsLoading(false);
+            
+            console.log('🧹 Cleared in-memory chat data and timers on logout');
+        }
+    }, [authContext.state.isAuthenticated]); // 42
+
+    useEffect(() => {
+        return () => {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+            if (statusPollingRef.current) {
+                clearInterval(statusPollingRef.current);
+            }
+        };
+    }, []); // 43
 
     return (
         <ChatContext.Provider value={{
@@ -706,6 +1364,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             sessions,
             recentQueries,
             currentSessionId,
+            selectedSession,
             addMessage,
             clearMessages,
             sendMessage,
@@ -714,9 +1373,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             isLoading,
             startNewSession,
             loadSession,
+            setSelectedSession,
             error,
             clearError,
             testNetwork,
+            loadUserSessions,
+            refreshChatHistory,
+            clearAllUserData,
+            addNewSession,
         }}>
             {children}
         </ChatContext.Provider>
