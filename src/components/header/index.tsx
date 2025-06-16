@@ -2,19 +2,26 @@ import React from 'react';
 
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
-import IconAssets from '../../assets/icons/IconAssets';
+import { getThemedIcon } from '../../assets/icons/IconAssets';
+import { useThemeContext } from '../../context/ThemeContext';
 
 type HeaderTypes = {
     onMenuPress: () => void
 }
 
 const Header = (props: HeaderTypes) => {
+
+    const { theme } = useThemeContext();
+
+    const ThemedLogoIcon = getThemedIcon('Logo', theme);
+    const ThemedMenuIcon = getThemedIcon('Menu', theme);
+
     return (
         <View style={styles.container}>
             <TouchableOpacity onPress={props?.onMenuPress}>
-                <IconAssets.Menu style={styles.icon} />
+                {ThemedMenuIcon && <ThemedMenuIcon style={styles.icon} />}
             </TouchableOpacity>
-            <IconAssets.Logo style={styles.logo} />
+            {ThemedLogoIcon && <ThemedLogoIcon style={styles.logo} />}
         </View>
     );
 };

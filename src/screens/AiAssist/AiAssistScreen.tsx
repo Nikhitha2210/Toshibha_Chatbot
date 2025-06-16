@@ -65,7 +65,7 @@ const AiAssistScreen = () => {
             <Header onMenuPress={openMenu} />
 
             <View style={styles.topBar}>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         {ThemedBackIcon && <ThemedBackIcon />}
                     </TouchableOpacity>

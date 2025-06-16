@@ -82,6 +82,8 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
         handleSend();
     };
 
+    console.log("isListening", isListening)
+
     return (
         <View style={styles.askSection}>
             <View style={{ flex: 1, marginRight: 10 }}>

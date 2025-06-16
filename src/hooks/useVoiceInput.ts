@@ -113,7 +113,7 @@ export const useVoiceInput = () => {
             autoStopTimeoutRef.current = setTimeout(() => {
                 console.log('⏰ 5 seconds passed - AUTO STOPPING');
                 stopListening();
-            }, 15000); // 15 seconds total
+            }, 10000); // 10 seconds total
             
         } catch (error) {
             console.error('❌ Error starting voice recognition:', error);

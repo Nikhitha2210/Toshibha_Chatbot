@@ -3,11 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import CheckBox from '@react-native-community/checkbox';
 
-import { styles } from './styles';
+import { getStyles } from './styles';
 import IconAssets from '../../assets/icons/IconAssets';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useChat } from '../../context/ChatContext';
 import ListeningDots from '../ListeningDots';
+import { useThemeContext } from '../../context/ThemeContext';
 
 interface FeedbackModalProps {
     visible: boolean;
@@ -31,6 +32,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     const { submitFeedback } = useChat();
 
     const clearVoiceInput = () => setVoiceInputText('');
+
+    const { theme } = useThemeContext();
+    const styles = getStyles(theme);
 
     useEffect(() => {
         let reasons: string[] = [];
@@ -141,7 +145,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         <CheckBox
                             value={harmful}
                             onValueChange={setHarmful}
-                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            tintColors={{ true: theme === 'dark' ? '#fff' : '#000', false: '#8A8A8A' }}
                             disabled={isSubmitting}
                         />
                         <Text style={styles.checkboxLabel}>This is harmful/unsafe</Text>
@@ -150,7 +154,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         <CheckBox
                             value={untrue}
                             onValueChange={setUntrue}
-                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            tintColors={{ true: theme === 'dark' ? '#fff' : '#000', false: '#8A8A8A' }}
                             disabled={isSubmitting}
                         />
                         <Text style={styles.checkboxLabel}>This isn't true</Text>
@@ -159,7 +163,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         <CheckBox
                             value={unhelpful}
                             onValueChange={setUnhelpful}
-                            tintColors={{ true: '#fff', false: '#8A8A8A' }}
+                            tintColors={{ true: theme === 'dark' ? '#fff' : '#000', false: '#8A8A8A' }}
                             disabled={isSubmitting}
                         />
                         <Text style={styles.checkboxLabel}>This isn't helpful</Text>

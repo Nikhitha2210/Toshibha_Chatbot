@@ -35,7 +35,6 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isMyQueriesEnabled, setIsMyQueriesEnabled] = useState(true);
-    const [showSettingsScreen, setShowSettingsScreen] = useState(false);
 
     const sidebarWidth = useState(new Animated.Value(SCREEN_WIDTH * 0.7))[0];
 

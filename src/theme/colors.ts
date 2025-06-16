@@ -4,11 +4,11 @@ const Colors = {
         background: '#FFFFFF',
         background2: '#F8FAFC',
         stroke: '#E2E8ED',
-        lightText: '#212124', // 56%
+        lightText: '#212124',
         iconGrey: '#939393',
-        text72: '#212124', // 72%
+        text72: '#212124',
         heading: '#212124',
-        tagFill: '#6C82711F', // translucent version
+        tagFill: '#6C82711F',
         tagFillSolid: '#6C8271',
         text: '#000000',
     },
@@ -16,11 +16,11 @@ const Colors = {
     dark: {
         primary: '#FF681F',
         background: '#161616',
-        background2: '#282828', // also used as tag fill
+        background2: '#282828',
         background3: '#1A1A1A',
-        stroke: '#FFFFFF1F', // 12% white
-        text: '#FFFFFF', // Main text
-        iconSubText: '#FFFFFF', // 50%
+        stroke: '#FFFFFF1F',
+        text: '#FFFFFF',
+        iconSubText: '#FFFFFF',
         subText: '#8A8A8A',
     },
 };

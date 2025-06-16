@@ -1,17 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  Image, 
-  Keyboard, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ScrollView, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  TouchableWithoutFeedback, 
-  View,
-  Alert 
-} from 'react-native';
+
+import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -21,7 +10,6 @@ import GoogleLogo from '../../assets/images/google.png';
 import IconAssets from '../../assets/icons/IconAssets';
 import { useAuth } from '../../context/AuthContext';
 
-
 type RootStackParamList = {
   Login: undefined;
   Home: undefined;
@@ -30,8 +18,8 @@ type RootStackParamList = {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const LoginScreen = () => {
-  const [email, setEmail] = useState(''); // Pre-filled for testing
-  const [password, setPassword] = useState(''); // Pre-filled for testing
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
 
@@ -39,20 +27,15 @@ const LoginScreen = () => {
   const { login, state, clearError } = useAuth();
 
   const handleSignIn = async () => {
-    console.log('=== LoginScreen handleSignIn Start ===');
-    
-    // Clear any previous errors
+
     clearError();
-    
-    // Validation
+
     let isValid = true;
 
     if (!email.trim()) {
-      console.log('Email validation failed: empty');
       setEmailError(true);
       isValid = false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      console.log('Email validation failed: invalid format');
       setEmailError(true);
       isValid = false;
     } else {
@@ -60,7 +43,6 @@ const LoginScreen = () => {
     }
 
     if (!password.trim()) {
-      console.log('Password validation failed: empty');
       setPasswordError(true);
       isValid = false;
     } else {
@@ -68,39 +50,24 @@ const LoginScreen = () => {
     }
 
     if (!isValid) {
-      console.log('Validation failed, stopping login');
       return;
     }
 
-    console.log('Validation passed, attempting login');
-    console.log('Email:', email.trim());
-    console.log('Password length:', password.length);
-
     try {
-      console.log('=== Calling login function ===');
-      
-      // Attempt login with REAL authentication
       await login(email.trim(), password);
-      
-      console.log('=== Login function completed successfully ===');
-      console.log('Navigating to Home screen');
-      
-      // If we get here, login was successful - navigate to Home
+
       navigation.navigate('Home');
-      
+
     } catch (error) {
       console.log('=== Login function threw error ===');
       console.log('Error object:', error);
       console.log('Error message:', error instanceof Error ? error.message : 'Unknown error');
       console.log('Error stack:', error instanceof Error ? error.stack : 'No stack');
-      
-      // Handle specific authentication errors
+
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      
-      console.log('Processing error message:', errorMessage);
-      
+
       let displayMessage = '';
-      
+
       switch (errorMessage) {
         case 'email_not_verified':
           displayMessage = 'Please verify your email address before logging in.';
@@ -118,30 +85,22 @@ const LoginScreen = () => {
           }
       }
 
-      console.log('Final display message:', displayMessage);
       Alert.alert('Login Failed', displayMessage);
     }
   };
 
   const handleGoogleSignIn = () => {
     Alert.alert(
-      'Google Sign In', 
+      'Google Sign In',
       'Google authentication will be implemented in a future update.',
       [{ text: 'OK' }]
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={styles.scrollViewContent}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView contentContainerStyle={styles.scrollViewContent} keyboardShouldPersistTaps="handled">
           <View style={styles.wrapper}>
             <View style={styles.logoWrapper}>
               <IconAssets.Logo style={styles.logo} />
@@ -153,10 +112,7 @@ const LoginScreen = () => {
                 <Text style={styles.subtitle}>Enter your login details below.</Text>
               </View>
 
-              <View style={[
-                styles.inputWrapper, 
-                emailError && { borderColor: 'red', borderWidth: 1 }
-              ]}>
+              <View style={[styles.inputWrapper, emailError && { borderColor: 'red', borderWidth: 1 }]}>
                 <IconAssets.Mail style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
@@ -174,10 +130,7 @@ const LoginScreen = () => {
                 />
               </View>
 
-              <View style={[
-                styles.inputWrapper, 
-                passwordError && { borderColor: 'red', borderWidth: 1 }
-              ]}>
+              <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>
                 <IconAssets.Lock style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
@@ -196,31 +149,24 @@ const LoginScreen = () => {
                 />
               </View>
 
-              {/* Show authentication error if any */}
               {state.error && (
-                <View style={{ 
-                  backgroundColor: '#ffebee', 
-                  padding: 10, 
-                  borderRadius: 5, 
-                  marginBottom: 10 
-                }}>
+                <View style={{ backgroundColor: '#ffebee', padding: 10, borderRadius: 5, marginBottom: 10 }}>
                   <Text style={{ color: '#c62828', fontSize: 14 }}>
                     {state.error}
                   </Text>
                 </View>
               )}
 
-              <TouchableOpacity 
-                style={[
-                  styles.signInButton, 
-                  state.isLoading && { opacity: 0.7 }
-                ]} 
+              <TouchableOpacity
+                style={[styles.signInButton, state.isLoading && { opacity: 0.7 }]}
                 onPress={handleSignIn}
                 disabled={state.isLoading}
               >
-                <Text style={styles.signInButtonText}>
-                  {state.isLoading ? 'Signing In...' : 'Sign in'}
-                </Text>
+                {state.isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.signInButtonText}>Sign in</Text>
+                )}
               </TouchableOpacity>
 
               <View style={styles.dividerWrapper}>
@@ -229,7 +175,7 @@ const LoginScreen = () => {
                 <View style={styles.dividerLine} />
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.googleButton}
                 onPress={handleGoogleSignIn}
                 disabled={state.isLoading}

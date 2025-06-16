@@ -11,26 +11,9 @@ const ThemeToggle = () => {
     <TouchableOpacity
       onPress={toggleTheme}
       activeOpacity={0.8}
-      style={{
-        width: 45,
-        height: 22,
-        borderRadius: 14,
-        backgroundColor: isDark ? '#aaa' : '#e4e8ec',
-        padding: 4,
-        justifyContent: 'center',
-        alignItems: isDark ? 'flex-end' : 'flex-start',
-      }}
+      style={{ width: 45, height: 22, borderRadius: 14, backgroundColor: isDark ? '#aaa' : '#e4e8ec', padding: 4, justifyContent: 'center', alignItems: isDark ? 'flex-end' : 'flex-start' }}
     >
-      <View
-        style={{
-          width: 18,
-          height: 18,
-          backgroundColor: isDark ? '#1a1a1a' : '#fff',
-          borderRadius: 10,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+      <View style={{ width: 18, height: 18, backgroundColor: isDark ? '#1a1a1a' : '#fff', borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}>
         <Feather
           name={isDark ? 'moon' : 'sun'}
           size={12}

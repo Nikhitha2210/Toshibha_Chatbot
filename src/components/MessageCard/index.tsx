@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { getStyles } from './styles';
-import IconAssets from '../../assets/icons/IconAssets';
+import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import FeedbackModal from '../Feedback/Feedback';
 import SourceModal from '../Source';
 import { useThemeContext } from '../../context/ThemeContext';
@@ -82,6 +82,8 @@ const MessageCard: React.FC<MessageCardProps> = ({
     const { submitVote, error, clearError } = useChat();
 
     const styles = getStyles(theme);
+
+    const ThemedThumbsUpIcon = getThemedIcon('ThumbsUp', theme);
 
     const isErrorMessage = message.toLowerCase().includes('error:') ||
         message.toLowerCase().includes('failed') ||
@@ -299,7 +301,8 @@ const MessageCard: React.FC<MessageCardProps> = ({
                                 style={styles.voteButton}
                                 activeOpacity={0.7}
                             >
-                                <IconAssets.ThumbsUp width={25} height={25} />
+                                {ThemedThumbsUpIcon && <ThemedThumbsUpIcon width={25} height={25} />}
+                                {/* <IconAssets.ThumbsUp width={25} height={25} /> */}
                             </TouchableOpacity>
                         )}
 

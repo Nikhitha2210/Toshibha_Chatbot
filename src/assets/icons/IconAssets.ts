@@ -1,5 +1,4 @@
 import Logo from './logo.svg';
-import Menu from './Menu.svg';
 import Lock from './lock.svg';
 import Mail from './Mail.svg';
 import Solid from './Solid.svg';
@@ -7,7 +6,6 @@ import Speedometer from './Speedometer.svg';
 import Microphone from './microphone.svg';
 import VerticalDots from './dots-vertical.svg';
 import Frame from './Frame.svg';
-import ThumbsUp from './thumbs-up.svg';
 import ThumbsDown from './thumbs-down.svg';
 import Flag from './Flag.svg';
 import Copy from './Copy.svg';
@@ -25,19 +23,24 @@ import FolderDark from './dark/Folder.svg';
 import StarDark from './dark/Star.svg'
 import SettingsDark from './dark/Settings.svg'
 import FilterDark from './dark/Filter.svg';
+import LogoDark from './dark/Logo.svg';
+import MenuDark from './dark/Menu.svg';
+import ThumbsUpDark from './dark/thumbs-up.svg';
 
 import NewChatLight from './light/NewChat.svg';
 import SearchLight from './light/Search.svg';
-// import ArrowLeftLight from './light/ArrowLeft.svg';
+import ArrowLeftLight from './light/ArrowLeft.svg';
 import CloseLight from './light/Close.svg';
 import FolderLight from './light/Folder.svg';
 import StarLight from './light/Star.svg';
 import SettingsLight from './light/Settings.svg';
 import FilterLight from './light/Filter.svg';
+import LogoLight from './light/Logo.svg';
+import MenuLight from './light/Menu.svg';
+import ThumbsUpLight from './light/thumbs-up.svg';
 
 const icons = {
     Logo,
-    Menu,
     Lock,
     Mail,
     Solid,
@@ -45,7 +48,6 @@ const icons = {
     Microphone,
     VerticalDots,
     Frame,
-    ThumbsUp,
     ThumbsDown,
     Flag,
     Copy,
@@ -64,16 +66,22 @@ const icons = {
     StarDark,
     SettingsDark,
     FilterDark,
+    LogoDark,
+    MenuDark,
+    ThumbsUpDark,
 
     // Light
     NewChatLight,
     SearchLight,
-    // ArrowLeftLight,
+    ArrowLeftLight,
     CloseLight,
     FolderLight,
     StarLight,
     SettingsLight,
     FilterLight,
+    LogoLight,
+    MenuLight,
+    ThumbsUpLight,
 };
 
 const themedIconMap = {
@@ -87,7 +95,7 @@ const themedIconMap = {
     },
     ArrowLeft: {
         dark: ArrowLeftDark,
-        light: ArrowLeftDark,
+        light: ArrowLeftLight,
     },
     Close: {
         dark: CloseDark,
@@ -109,6 +117,18 @@ const themedIconMap = {
         dark: FilterDark,
         light: FilterLight,
     },
+    Logo: {
+        dark: LogoDark,
+        light: LogoLight,
+    },
+    Menu: {
+        dark: MenuDark,
+        light: MenuLight
+    },
+    ThumbsUp: {
+        dark: ThumbsUpDark,
+        light: ThumbsUpLight,
+    }
 };
 
 export const getThemedIcon = (

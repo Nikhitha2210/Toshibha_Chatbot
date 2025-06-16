@@ -3,11 +3,15 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 
 import { usePrompt } from '../../context/PromptContext';
 import { useChat } from '../../context/ChatContext';
-import { styles } from './styles';
+import { getStyles } from './styles';
+import { useThemeContext } from '../../context/ThemeContext';
 
 const RecentQueries = () => {
     const { setInputText } = usePrompt();
     const { recentQueries, error, clearError } = useChat();
+
+    const { theme } = useThemeContext();
+    const styles = getStyles(theme);
 
     const handleQueryPress = (queryText: string) => {
         try {
@@ -52,7 +56,6 @@ const RecentQueries = () => {
                 )}
             </View>
 
-            {/* Show error message if there's an error loading recent queries */}
             {error && (
                 <View style={{
                     backgroundColor: '#ffebee',
@@ -69,7 +72,7 @@ const RecentQueries = () => {
             )}
 
             {hasQueries ? (
-                <ScrollView 
+                <ScrollView
                     style={{ flex: 1, maxHeight: 250 }}
                     contentContainerStyle={{ paddingBottom: 10 }}
                     showsVerticalScrollIndicator={true}
