@@ -30,8 +30,8 @@ type RootStackParamList = {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const LoginScreen = () => {
-  const [email, setEmail] = useState('nikhitha.kandula@iopex.com'); // Pre-filled for testing
-  const [password, setPassword] = useState('hIPOwy4B>>%MoV#D'); // Pre-filled for testing
+  const [email, setEmail] = useState(''); // Pre-filled for testing
+  const [password, setPassword] = useState(''); // Pre-filled for testing
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
 

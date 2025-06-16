@@ -27,6 +27,7 @@ type RootStackParamList = {
     Login: undefined;
     Home: undefined;
     AiAssist: undefined;
+    Settings: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -34,6 +35,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isMyQueriesEnabled, setIsMyQueriesEnabled] = useState(true);
+    const [showSettingsScreen, setShowSettingsScreen] = useState(false);
 
     const sidebarWidth = useState(new Animated.Value(SCREEN_WIDTH * 0.7))[0];
 
@@ -133,14 +135,14 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
             <Animated.View style={[styles.sidebarWrapper, { transform: [{ translateX: slideAnim }] }]}>
                 <Animated.View style={[styles.sidebar, { width: sidebarWidth }]}>
                     <SearchComponent onFocus={expandSidebar} onBlur={resetSidebar} onEditPress={handleNewChat} />
-                    
+
                     <TouchableOpacity style={{ alignItems: 'center' }} onPress={handleNewChat}>
                         <Text style={styles.advanceSearchText}>+ New Chat</Text>
                     </TouchableOpacity>
-                    
+
                     <View style={styles.divider} />
-                    
-                    <TouchableOpacity style={styles.navigationProjects}>
+
+                    {/* <TouchableOpacity style={styles.navigationProjects}>
                         {ThemedFolderIcon && <ThemedFolderIcon style={styles.navigationProjectsIcon} />}
                         <Text style={styles.navigationProjectsText}>Projects</Text>
                     </TouchableOpacity>
@@ -150,8 +152,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                         <Text style={styles.navigationExploreQueriesText}>Explore Queries</Text>
                     </TouchableOpacity>
                     
-                    <View style={styles.divider} />
-                    
+                    <View style={styles.divider} /> */}
+
                     <View style={styles.myQueriesWrapper}>
                         <Text style={styles.myQuerieText}>My Sessions</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -177,10 +179,10 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                             {ThemedFilterIcon && <ThemedFilterIcon style={styles.myQueriesIcon} />}
                         </View>
                     </View>
-                    
+
                     <View style={{ flex: 1 }}>
-                        <ScrollView 
-                            contentContainerStyle={{ flexGrow: 1 }} 
+                        <ScrollView
+                            contentContainerStyle={{ flexGrow: 1 }}
                             showsVerticalScrollIndicator={false}
                             nestedScrollEnabled={true}
                         >
@@ -274,9 +276,15 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                             )}
                         </ScrollView>
                     </View>
-                    
+
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <TouchableOpacity style={styles.settingWrapper}>
+                        <TouchableOpacity
+                            style={styles.settingWrapper}
+                            onPress={() => {
+                                handleClose();
+                                navigation.navigate('Settings');
+                            }}
+                        >
                             {ThemedSettingsIcon && <ThemedSettingsIcon style={styles.settingIcon} />}
                             <Text style={styles.settingsText}>Settings</Text>
                         </TouchableOpacity>

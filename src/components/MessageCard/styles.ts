@@ -3,7 +3,7 @@ import Colors from "../../theme/colors";
 
 export const getStyles = (theme: 'light' | 'dark') => {
     const colorScheme = Colors[theme];
-    
+
     return StyleSheet.create({
         card: {
             backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background2,
@@ -32,7 +32,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
         messageText: {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.iconGrey,
             fontSize: 14,
-            marginBottom: 10,
             lineHeight: 20,
         },
         highlightBox: {
@@ -60,32 +59,31 @@ export const getStyles = (theme: 'light' | 'dark') => {
         },
         actionsRow: {
             flexDirection: 'row',
-            marginTop: 10,
             justifyContent: 'space-between',
             alignItems: 'center',
         },
         sourceButton: {
             backgroundColor: Colors.dark.stroke,
-            paddingVertical: 4,
-            paddingHorizontal: 10,
+            paddingVertical: 5,
+            paddingHorizontal: 12,
             borderRadius: 8,
             borderWidth: 1,
             borderColor: Colors.dark.subText
         },
         sourceText: {
             color: Colors.dark.subText,
-            fontSize: 10,
+            fontSize: 12,
         },
         voteButtons: {
             flexDirection: 'row',
-            gap: 20, // More space between vote buttons for easier tapping
+            gap: 5,
         },
         voteButton: {
-            padding: 12, // Bigger touch area around the same icons
+            padding: 12,
             borderRadius: 8,
             alignItems: 'center',
             justifyContent: 'center',
-            minWidth: 44, // iOS/Android recommended minimum touch target
+            minWidth: 44,
             minHeight: 44,
         },
         actionIcons: {

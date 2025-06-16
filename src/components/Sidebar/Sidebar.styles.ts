@@ -130,5 +130,34 @@ export const getStyles = (theme: 'light' | 'dark') => {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.text,
             marginLeft: 10
         },
+        settingsScreen: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+
+        backButton: {
+            alignSelf: 'flex-start',
+            marginBottom: 20,
+        },
+
+        backButtonText: {
+            fontSize: 16,
+            color: Colors.dark.primary,
+        },
+
+        logoutButton: {
+            backgroundColor: '#B42626',
+            padding: 12,
+            borderRadius: 8,
+        },
+
+        logoutButtonText: {
+            color: '#fff',
+            fontSize: 16,
+            fontWeight: 'bold',
+        },
+
     });
 }

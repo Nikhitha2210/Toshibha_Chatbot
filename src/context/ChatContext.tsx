@@ -2,13 +2,13 @@ import { createContext, ReactNode, useContext, useState, useCallback, useEffect,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import uuid from 'react-native-uuid';
 import { useAuth } from './AuthContext';
-import { 
-  API_CONFIG, 
-  logApiCall, 
-  getChatApiUrl, 
-  getImageUrl, 
-  safeFetch,
-  testNetworkConnections
+import {
+    API_CONFIG,
+    logApiCall,
+    getChatApiUrl,
+    getImageUrl,
+    safeFetch,
+    testNetworkConnections
 } from '../config/environment';
 
 const uuidv4 = () => uuid.v4() as string;
@@ -150,11 +150,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const [selectedSession, setSelectedSessionState] = useState<ChatSession | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
+
     const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const statusPollingRef = useRef<NodeJS.Timeout | null>(null);
     const lastAutoSaveRef = useRef<number>(0);
-    
+
     const authContext = useAuth();
 
     const safeApiCall = useCallback(async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
@@ -188,18 +188,18 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     // ✅ NEW: Check if session has meaningful content
     const hasSessionContent = useCallback((sessionMessages: ChatMessage[]) => {
         if (!sessionMessages || sessionMessages.length < 2) return false;
-        
-        const hasUserMessage = sessionMessages.some(msg => 
+
+        const hasUserMessage = sessionMessages.some(msg =>
             msg.isUser && msg.message.trim().length > 0
         );
-        const hasAIMessage = sessionMessages.some(msg => 
-            !msg.isUser && 
-            !msg.isStreaming && 
+        const hasAIMessage = sessionMessages.some(msg =>
+            !msg.isUser &&
+            !msg.isStreaming &&
             msg.message.trim().length > 0 &&
             !msg.message.includes('Processing your request') &&
             !msg.message.includes('Error:')
         );
-        
+
         return hasUserMessage && hasAIMessage;
     }, []);
 
@@ -207,21 +207,21 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const cleanupEmptySessions = useCallback(async () => {
         try {
             console.log('🧹 Cleaning up empty sessions...');
-            
+
             const userId = getCurrentUserId();
             const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
-            
+
             if (userSessionsStr) {
                 const sessionList = JSON.parse(userSessionsStr);
                 const validSessions = [];
                 let removedCount = 0;
-                
+
                 for (const sessionRef of sessionList) {
                     try {
                         const sessionStr = await AsyncStorage.getItem(`session_${sessionRef.id}`);
                         if (sessionStr) {
                             const fullSession = JSON.parse(sessionStr);
-                            
+
                             if (hasSessionContent(fullSession.messages)) {
                                 validSessions.push(sessionRef);
                             } else {
@@ -238,13 +238,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         removedCount++;
                     }
                 }
-                
+
                 // Update the session list with only valid sessions
                 await AsyncStorage.setItem(`user_sessions_${userId}`, JSON.stringify(validSessions));
-                
+
                 // Update in-memory sessions
                 setSessions(prev => prev.filter(session => hasSessionContent(session.messages)));
-                
+
                 console.log(`✅ Cleanup complete: Removed ${removedCount} empty sessions, kept ${validSessions.length} valid sessions`);
             }
         } catch (error) {
@@ -255,10 +255,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const fetchChatHistoryFromBackend = useCallback(async (): Promise<ChatSession[]> => {
         try {
             console.log('🌐 Fetching chat history from backend...');
-            
+
             const token = authContext.state.tokens?.access_token;
             const userId = getCurrentUserId();
-            
+
             if (!token) {
                 console.log('❌ No token available for chat history');
                 return [];
@@ -279,7 +279,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             for (const url of possibleUrls) {
                 try {
                     console.log(`🔍 Testing chat history endpoint: ${url}`);
-                    
+
                     const response = await safeFetch(url, {
                         method: 'GET',
                         headers: {
@@ -294,14 +294,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         const responseText = await response.text();
                         console.log(`✅ Found working endpoint: ${url}`);
                         console.log(`📄 Response preview:`, responseText.substring(0, 300));
-                        
+
                         try {
                             const chatHistory = JSON.parse(responseText);
                             console.log(`🎉 Successfully parsed chat history from backend`);
-                            
+
                             const convertedSessions = convertBackendChatHistory(chatHistory, userId);
                             console.log(`✅ Converted ${convertedSessions.length} sessions from backend`);
-                            
+
                             return convertedSessions;
                         } catch (parseError) {
                             console.log(`⚠️ Could not parse JSON from ${url}:`, parseError);
@@ -318,10 +318,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     console.log(`💥 ${url} - Exception:`, error);
                 }
             }
-            
+
             console.log('❌ No working chat history endpoint found');
             return [];
-            
+
         } catch (error) {
             console.error('❌ Failed to fetch chat history from backend:', error);
             return [];
@@ -331,9 +331,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const convertBackendChatHistory = useCallback((backendData: any, userId: string): ChatSession[] => {
         try {
             console.log('🔄 Converting backend chat history format...');
-            
+
             let chatArray = backendData;
-            
+
             if (backendData.sessions) {
                 chatArray = backendData.sessions;
             } else if (backendData.conversations) {
@@ -357,9 +357,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 const title = item.session_name || item.first_message?.substring(0, 50) || `Chat ${index + 1}`;
                 const timestamp = item.created_at || item.updated_at || new Date().toISOString();
                 const creationDate = item.created_at || timestamp;
-                
+
                 let messages: ChatMessage[] = [];
-                
+
                 if (item.messages && Array.isArray(item.messages)) {
                     messages = item.messages.map((msg: BackendMessage, msgIndex: number) => {
                         const messageId = msg.id || `msg-${sessionId}-${msgIndex}`;
@@ -396,7 +396,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                             }
                         });
                     }
-                    
+
                     if (item.last_message && item.last_message !== item.first_message) {
                         messages.push({
                             id: `${sessionId}-last`,
@@ -431,7 +431,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             console.log(`✅ Converted ${validSessions.length} valid chat sessions from backend (filtered out ${convertedSessions.length - validSessions.length} empty sessions)`);
             return validSessions;
-            
+
         } catch (error) {
             console.error('❌ Error converting backend chat history:', error);
             return [];
@@ -441,10 +441,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const saveSessionToBackend = useCallback(async (session: ChatSession) => {
         try {
             console.log('💾 Saving session to backend database (Web App Compatible)...');
-            
+
             const token = authContext.state.tokens?.access_token;
             const userId = getCurrentUserId();
-            
+
             if (!token) {
                 console.log('❌ No token for backend session save');
                 return false;
@@ -473,7 +473,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const possibleSaveUrls = [
                 'https://tgcsbe.iopex.ai/api/sessions',
-                'https://tgcsbe.iopex.ai/sessions', 
+                'https://tgcsbe.iopex.ai/sessions',
                 'https://tgcsbe.iopex.ai/api/chat/sessions',
                 'https://tgcsbe.iopex.ai/chat/sessions',
                 'https://tgcsbe.iopex.ai/api/chat/save-session',
@@ -489,9 +489,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const payloadFormats = [
                 webAppSession,
                 { session: webAppSession },
-                { 
+                {
                     userId: userId,
-                    session: webAppSession 
+                    session: webAppSession
                 },
                 {
                     sessionId: session.id,
@@ -514,7 +514,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 for (let i = 0; i < payloadFormats.length; i++) {
                     try {
                         console.log(`🔍 Testing session save: ${url} with format ${i + 1}`);
-                        
+
                         const response = await safeFetch(url, {
                             method: 'POST',
                             headers: {
@@ -545,10 +545,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
             }
-            
+
             console.log('❌ No working session save endpoint found');
             return false;
-            
+
         } catch (error) {
             console.error('❌ Failed to save session to backend:', error);
             return false;
@@ -560,7 +560,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const userId = getCurrentUserId();
             const existingVotesStr = await AsyncStorage.getItem(`user_votes_${userId}`);
             const existingVotes = existingVotesStr ? JSON.parse(existingVotesStr) : [];
-            
+
             const voteData: VoteData = {
                 messageId,
                 messageText: messageText.substring(0, 100),
@@ -568,13 +568,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 timestamp: new Date().toISOString(),
                 userId
             };
-            
+
             const filteredVotes = existingVotes.filter((vote: VoteData) => vote.messageId !== messageId);
             filteredVotes.push(voteData);
-            
+
             await AsyncStorage.setItem(`user_votes_${userId}`, JSON.stringify(filteredVotes));
             console.log('💾 Vote saved to local storage');
-            
+
         } catch (error) {
             console.error('Failed to save vote to storage:', error);
         }
@@ -587,11 +587,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             if (votesStr) {
                 const votes: VoteData[] = JSON.parse(votesStr);
                 console.log('📥 Loaded votes from storage:', votes.length);
-                
+
                 setMessages(prev => prev.map(msg => {
                     if (!msg.isUser) {
-                        const savedVote = votes.find(vote => 
-                            vote.messageId === msg.id || 
+                        const savedVote = votes.find(vote =>
+                            vote.messageId === msg.id ||
                             vote.messageText === msg.message.substring(0, 100)
                         );
                         if (savedVote) {
@@ -604,7 +604,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     }
                     return msg;
                 }));
-                
+
                 return votes;
             }
         } catch (error) {
@@ -629,10 +629,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const userId = getCurrentUserId();
             await AsyncStorage.setItem(`session_${session.id}`, JSON.stringify(session));
-            
+
             const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
             const userSessions = userSessionsStr ? JSON.parse(userSessionsStr) : [];
-            
+
             const filteredSessions = userSessions.filter((s: any) => s.id !== session.id);
             filteredSessions.unshift({
                 id: session.id,
@@ -641,11 +641,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 creationDate: session.creationDate,
                 userId: session.userId
             });
-            
+
             const limitedSessions = filteredSessions.slice(0, 50);
             await AsyncStorage.setItem(`user_sessions_${userId}`, JSON.stringify(limitedSessions));
             console.log('💾 Session saved to storage:', session.title);
-            
+
         } catch (error) {
             console.error('Failed to save session to storage:', error);
         }
@@ -658,9 +658,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             if (userSessionsStr) {
                 const sessionList = JSON.parse(userSessionsStr);
                 console.log('📥 Found user session list:', sessionList.length);
-                
+
                 const fullSessions: ChatSession[] = [];
-                
+
                 for (const sessionRef of sessionList) {
                     try {
                         const sessionStr = await AsyncStorage.getItem(`session_${sessionRef.id}`);
@@ -675,7 +675,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         console.log(`Failed to load session ${sessionRef.id}:`, error);
                     }
                 }
-                
+
                 console.log('✅ Loaded local sessions with content:', fullSessions.length);
                 return fullSessions;
             }
@@ -689,30 +689,30 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         try {
             console.log('🔄 Refreshing chat history from backend + local...');
             setError(null);
-            
+
             const [backendSessions, localSessions] = await Promise.all([
                 fetchChatHistoryFromBackend(),
                 loadUserSessions()
             ]);
-            
+
             const allSessions = [...backendSessions, ...localSessions];
-            
-            const uniqueSessions = allSessions.filter((session, index, self) => 
-                index === self.findIndex(s => 
-                    s.id === session.id || 
+
+            const uniqueSessions = allSessions.filter((session, index, self) =>
+                index === self.findIndex(s =>
+                    s.id === session.id ||
                     (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
                 )
             );
-            
+
             // ✅ FIXED: Filter out empty sessions
             const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
             validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
-            
+
             console.log(`📊 Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length}, Filtered: ${uniqueSessions.length - validSessions.length})`);
-            
+
             setSessions(validSessions);
             console.log('✅ Chat history refreshed successfully');
-            
+
         } catch (error) {
             console.error('❌ Failed to refresh chat history:', error);
             setError('Failed to refresh chat history');
@@ -728,20 +728,20 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             await saveSessionToStorage(sessionData);
-            
+
             const backendSaved = await saveSessionToBackend(sessionData);
-            
+
             if (backendSaved) {
                 console.log('✅ Session saved to BOTH local and backend database');
             } else {
                 console.log('⚠️ Session saved locally only (backend save failed)');
             }
-            
+
             setSessions(prev => {
                 const filtered = prev.filter(s => s.id !== sessionData.id);
                 return [sessionData, ...filtered];
             });
-            
+
         } catch (error) {
             console.error('❌ Enhanced auto-save failed:', error);
         }
@@ -750,9 +750,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const clearAllUserData = useCallback(async () => {
         try {
             const userId = getCurrentUserId();
-            
+
             await AsyncStorage.removeItem(`user_votes_${userId}`);
-            
+
             const userSessionsStr = await AsyncStorage.getItem(`user_sessions_${userId}`);
             if (userSessionsStr) {
                 const sessionList = JSON.parse(userSessionsStr);
@@ -762,15 +762,15 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
             await AsyncStorage.removeItem(`user_sessions_${userId}`);
             await AsyncStorage.removeItem('recent_queries');
-            
+
             setSessions([]);
             setRecentQueries([]);
             setMessages([]);
             setCurrentSessionId(null);
             setSelectedSessionState(null);
-            
+
             console.log('🗑️ All user data cleared');
-            
+
         } catch (error) {
             console.error('Failed to clear user data:', error);
         }
@@ -802,7 +802,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
     const updateMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
         try {
-            setMessages(prev => prev.map(msg => 
+            setMessages(prev => prev.map(msg =>
                 msg.id === id ? { ...msg, ...updates } : msg
             ));
         } catch (error) {
@@ -820,7 +820,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             };
 
             const updatedQueries = [newQuery, ...recentQueries]
-                .filter((query, index, self) => 
+                .filter((query, index, self) =>
                     index === self.findIndex(q => q.message.toLowerCase() === query.message.toLowerCase())
                 )
                 .slice(0, 10);
@@ -861,14 +861,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     userId: getCurrentUserId(),
                     label: sessionTitle
                 };
-                
+
                 enhancedAutoSave(newSession);
                 setSessions(prev => [newSession, ...prev.filter(s => s.id !== currentSessionId)]);
                 console.log('✅ Session saved with content:', sessionTitle);
             } else {
                 console.log('⏭️ Skipping empty session save - no meaningful content');
             }
-            
+
             const newSessionId = uuidv4();
             setCurrentSessionId(newSessionId);
             setSelectedSessionState(null);
@@ -911,17 +911,17 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
         try {
             const sources: SourceReference[] = [];
-            
+
             const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/g;
             let match;
-            
+
             while ((match = awsIdPattern.exec(text)) !== null) {
                 const awsLink = match[1].trim();
                 const parts = awsLink.split('_page_');
                 if (parts.length >= 2) {
                     const filename = parts[0].replace(/_/g, ' ');
                     const pageNum = parts[1];
-                    
+
                     sources.push({
                         filename: filename,
                         pages: pageNum,
@@ -930,17 +930,17 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     });
                 }
             }
-            
+
             const sourcePattern = /Source:\s*([^[]+)\[aws_id:\s*([^\]]+)\]/g;
             while ((match = sourcePattern.exec(text)) !== null) {
                 const sourceText = match[1].trim();
                 const awsLink = match[2].trim();
-                
+
                 const pageMatch = sourceText.match(/(.+?)\s+page\s+(\d+)/i);
                 if (pageMatch) {
                     const filename = pageMatch[1].trim();
                     const pageNum = pageMatch[2];
-                    
+
                     const existingSource = sources.find(s => s.awsLink === awsLink);
                     if (!existingSource) {
                         sources.push({
@@ -952,7 +952,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
             }
-            
+
             console.log('📋 Extracted sources:', sources);
             return sources;
         } catch (error) {
@@ -1045,13 +1045,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const startStatusPolling = () => {
                 const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${APP_SESSION_ID}`);
-                
+
                 statusPollingRef.current = setInterval(async () => {
                     try {
                         const statusResponse = await safeFetch(statusUrl);
                         if (statusResponse.ok) {
                             const statusText = await statusResponse.text();
-                            
+
                             const lines = statusText.split('\n');
                             for (const line of lines) {
                                 if (line.startsWith('data: ')) {
@@ -1105,7 +1105,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             });
 
             console.log('✅ Chat response received');
-            
+
             const responseText = await response.text();
             console.log('📝 Full response length:', responseText.length);
 
@@ -1121,7 +1121,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 extractedSources = extractSourcesFromText(fullMessage);
-                
+
                 const words = fullMessage.split(' ');
                 for (let i = 0; i < words.length; i += 3) {
                     const chunk = words.slice(0, i + 3).join(' ');
@@ -1129,7 +1129,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         message: chunk,
                         isStreaming: true
                     });
-                    
+
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
@@ -1153,15 +1153,15 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         } catch (error) {
             console.error('❌ Send message error:', error);
-            
+
             if (statusPollingRef.current) {
                 clearInterval(statusPollingRef.current);
                 statusPollingRef.current = null;
             }
-            
+
             const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
             setError(errorMessage);
-            
+
             const aiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
             if (aiMessages.length > 0) {
                 updateMessage(aiMessages[0].id, {
@@ -1185,7 +1185,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
         try {
             console.log(`🗳️ Submitting ${voteType} for message`);
-            
+
             const isSessionValid = await authContext.validateSessionBeforeRequest();
             if (!isSessionValid) {
                 throw new Error('Session expired. Please log in again.');
@@ -1193,7 +1193,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const token = authContext.state.tokens?.access_token;
 
-            const aiMessage = messages.find(msg => 
+            const aiMessage = messages.find(msg =>
                 !msg.isUser && msg.message === messageText
             );
 
@@ -1202,12 +1202,12 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const voteUrl = 'https://tgcsbe.iopex.ai/vote';
-            
+
             const votePayload = {
-                message_id: aiMessage.id,                    
-                user_id: getCurrentUserId(),                 
-                vote: voteType === 'upvote' ? 1 : -1,       
-                session_id: currentSessionId || APP_SESSION_ID 
+                message_id: aiMessage.id,
+                user_id: getCurrentUserId(),
+                vote: voteType === 'upvote' ? 1 : -1,
+                session_id: currentSessionId || APP_SESSION_ID
             };
 
             console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
@@ -1228,7 +1228,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 const responseText = await response.text();
                 console.log('✅ Vote SUCCESS! Response:', responseText);
 
-                setMessages(prev => prev.map(msg => 
+                setMessages(prev => prev.map(msg =>
                     msg.message === messageText && !msg.isUser ? {
                         ...msg,
                         hasVoted: true,
@@ -1240,7 +1240,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
                 console.log(`✅ ${voteType} submitted successfully`);
                 clearError();
-                
+
             } else {
                 const errorText = await response.text();
                 console.log('❌ Vote failed:', response.status, '-', errorText);
@@ -1258,7 +1258,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
         try {
             console.log('📝 Submitting feedback for message');
-            
+
             const isSessionValid = await authContext.validateSessionBeforeRequest();
             if (!isSessionValid) {
                 throw new Error('Session expired. Please log in again.');
@@ -1266,7 +1266,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             const token = authContext.state.tokens?.access_token;
 
-            const aiMessage = messages.find(msg => 
+            const aiMessage = messages.find(msg =>
                 !msg.isUser && msg.message === messageText
             );
 
@@ -1304,7 +1304,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const responseText = await response.text();
             console.log('✅ Feedback response body:', responseText);
 
-            setMessages(prev => prev.map(msg => 
+            setMessages(prev => prev.map(msg =>
                 msg.message === messageText && !msg.isUser ? {
                     ...msg,
                     feedback: feedback
@@ -1325,7 +1325,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const testNetwork = useCallback(async () => {
         console.log('🧪 Starting network connectivity test...');
         setError(null);
-        
+
         try {
             await testNetworkConnections();
             console.log('✅ Network test completed');
@@ -1344,23 +1344,23 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             console.log('🚀 ChatProvider initializing with backend integration...');
-            
+
             try {
                 // ✅ Run cleanup first to remove empty sessions
                 await cleanupEmptySessions();
-                
+
                 await Promise.all([
                     loadRecentQueries(),
                     refreshChatHistory(),
                     loadVotesFromStorage()
                 ]);
-                
+
                 console.log('✅ All user data loaded successfully');
             } catch (error) {
                 console.error('❌ Failed to load user data:', error);
                 setError('Failed to load user data');
             }
-            
+
             console.log('📱 App Session ID:', APP_SESSION_ID);
         };
 
@@ -1386,9 +1386,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         userId: getCurrentUserId(),
                         label: sessionTitle
                     };
-                    
+
                     await enhancedAutoSave(sessionData);
-                    
+
                     console.log('💾 Session auto-saved with meaningful content:', sessionTitle);
                 } catch (error) {
                     console.error('❌ Failed to auto-save session:', error);
@@ -1429,7 +1429,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             setSelectedSessionState(null);
             setError(null);
             setIsLoading(false);
-            
+
             console.log('🧹 Cleared in-memory chat data and timers on logout');
         }
     }, [authContext.state.isAuthenticated]);

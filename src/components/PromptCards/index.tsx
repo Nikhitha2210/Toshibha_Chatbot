@@ -33,13 +33,10 @@ const PromptCards = () => {
         try {
             // Set the input text
             setInputText(cardText);
-            
+
             // Clear previous messages
             clearMessages();
-            
-            // Navigate to AI Assist screen first
-            navigation.navigate('AiAssist');
-            
+
             // Small delay to ensure navigation completes
             setTimeout(async () => {
                 try {
@@ -49,7 +46,7 @@ const PromptCards = () => {
                     console.error('Error sending preset message:', error);
                 }
             }, 100);
-            
+
         } catch (error) {
             console.error('Error handling card press:', error);
         }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-import { Animated, Dimensions, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Animated, Dimensions, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 
@@ -20,14 +20,13 @@ const AiAssistScreen = () => {
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
     const scrollViewRef = useRef<ScrollView>(null);
 
-    const { messages, error, clearError } = useChat();
+    const { messages, error, clearError, sendMessage } = useChat();
     const navigation = useNavigation();
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
     const ThemedBackIcon = getThemedIcon('ArrowLeft', theme);
 
-    // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
         if (messages.length > 0) {
             setTimeout(() => {
@@ -53,10 +52,8 @@ const AiAssistScreen = () => {
         }).start(() => setModalVisible(false));
     };
 
-    // Swipe gesture only for left edge swipe detection
     const swipeGesture = Gesture.Pan()
         .onUpdate((e) => {
-            // Only detect swipe from very left edge
             if (e.absoluteX < 50 && e.translationX > 80) {
                 openMenu();
             }
@@ -65,22 +62,20 @@ const AiAssistScreen = () => {
 
     return (
         <View style={styles.container}>
-            {/* Header - Outside gesture detector */}
             <Header onMenuPress={openMenu} />
-            
+
             <View style={styles.topBar}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         {ThemedBackIcon && <ThemedBackIcon />}
                     </TouchableOpacity>
-                    <Text style={styles.topBarTitle}>AI Assist</Text>
+                    <Text style={styles.topBarTitle}>Ask Toshiba</Text>
                 </View>
                 <TouchableOpacity onPress={() => console.log('Options')}>
                     <IconAssets.VerticalDots />
                 </TouchableOpacity>
             </View>
 
-            {/* Global error display */}
             {error && (
                 <View style={{
                     backgroundColor: '#ffebee',
@@ -102,9 +97,8 @@ const AiAssistScreen = () => {
                 </View>
             )}
 
-            {/* Messages ScrollView - No gesture interference */}
             <View style={styles.messagesContainer}>
-                <ScrollView 
+                <ScrollView
                     ref={scrollViewRef}
                     style={styles.scrollView}
                     contentContainerStyle={styles.scrollContent}
@@ -117,37 +111,35 @@ const AiAssistScreen = () => {
                 >
                     {messages.length === 0 ? (
                         <View style={styles.emptyState}>
-                            <Text style={styles.emptyStateText}>
-                                Start a conversation by asking a question
-                            </Text>
+                            <ActivityIndicator size="large" color="#1B4965" />
                         </View>
                     ) : (
-                        messages.map((msg) => (
-                            <MessageCard
-                                key={msg.id}
-                                time={msg.time}
-                                message={msg.message}
-                                isUser={msg.isUser}
-                                isStreaming={msg.isStreaming || false}
-                                agentStatus={msg.agentStatus}
-                                sources={msg.sources || []} // Direct pass - already SourceReference[]
-                                hasVoted={msg.hasVoted || false}
-                                voteType={msg.voteType}
-                                highlight={msg.highlight}
-                            />
-                        ))
+                        <>
+                            {messages.map((msg) => (
+                                <MessageCard
+                                    key={msg.id}
+                                    time={msg.time}
+                                    message={msg.message}
+                                    isUser={msg.isUser}
+                                    isStreaming={msg.isStreaming || false}
+                                    agentStatus={msg.agentStatus}
+                                    sources={msg.sources || []}
+                                    hasVoted={msg.hasVoted || false}
+                                    voteType={msg.voteType}
+                                    highlight={msg.highlight}
+                                />
+                            ))}
+                        </>
                     )}
                 </ScrollView>
             </View>
 
-            {/* Fixed input at bottom */}
             <View style={styles.inputWrapper}>
                 <View style={styles.inputContainer}>
                     <PromptInput />
                 </View>
             </View>
 
-            {/* Gesture detector only on left edge - doesn't interfere with content */}
             <GestureDetector gesture={swipeGesture}>
                 <View style={styles.leftEdgeGestureArea} />
             </GestureDetector>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -30,14 +31,34 @@ interface MessageCardProps {
     isUser?: boolean;
     isStreaming?: boolean;
     agentStatus?: string;
-    sources?: SourceReference[]; // Accept SourceReference array
+    sources?: SourceReference[];
     hasVoted?: boolean;
     voteType?: 'upvote' | 'downvote';
 }
 
-const MessageCard: React.FC<MessageCardProps> = ({ 
-    time, 
-    message, 
+const TypingDots = () => {
+    return (
+        <View style={{ flexDirection: 'row', paddingVertical: 6 }}>
+            {[0, 1, 2].map((_, i) => (
+                <Text
+                    key={i}
+                    style={{
+                        fontSize: 20,
+                        color: '#FF6A00',
+                        marginHorizontal: 2,
+                        opacity: 0.3 + (i * 0.3),
+                    }}
+                >
+                    •
+                </Text>
+            ))}
+        </View>
+    );
+};
+
+const MessageCard: React.FC<MessageCardProps> = ({
+    time,
+    message,
     highlight,
     isUser = false,
     isStreaming = false,
@@ -62,50 +83,44 @@ const MessageCard: React.FC<MessageCardProps> = ({
 
     const styles = getStyles(theme);
 
-    // Check if this is an error message
-    const isErrorMessage = message.toLowerCase().includes('error:') || 
-                          message.toLowerCase().includes('failed') ||
-                          message.toLowerCase().includes('network request failed');
+    const isErrorMessage = message.toLowerCase().includes('error:') ||
+        message.toLowerCase().includes('failed') ||
+        message.toLowerCase().includes('network request failed');
 
-    // Handle upvote with error handling
     const handleLike = async () => {
         if (liked || (hasVoted && voteType === 'upvote')) return;
-        
+
         try {
             setLiked(true);
             setDisliked(false);
-            
+
             await submitVote(message, 'upvote');
-            console.log('✅ Upvote successful');
-            
+
         } catch (error) {
             console.error('❌ Upvote error:', error);
-            setLiked(false); // Revert on error
+            setLiked(false);
             Alert.alert('Error', 'Failed to submit vote. Please try again.');
         }
     };
 
-    // Handle downvote with error handling
     const handleDislike = async () => {
         if (disliked || (hasVoted && voteType === 'downvote')) return;
-        
+
         try {
             setDisliked(true);
             setLiked(false);
             setFeedbackVisible(true);
-            
+
             await submitVote(message, 'downvote');
-            console.log('✅ Downvote successful, feedback modal opened');
-            
+
         } catch (error) {
             console.error('❌ Downvote error:', error);
-            setDisliked(false); // Revert on error
+            setDisliked(false);
             setFeedbackVisible(false);
             Alert.alert('Error', 'Failed to submit vote. Please try again.');
         }
     };
 
-    // Convert SourceReference to format expected by SourceModal
     const sourceLinks = sources.map((source, index) => ({
         id: index + 1,
         label: `Source ${index + 1}`,
@@ -115,7 +130,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
         url: source.url
     }));
 
-    // If it's a user message, show simple orange bubble (right side)
     if (isUser) {
         return (
             <View style={{ alignItems: 'flex-end', marginBottom: 20, paddingHorizontal: 10 }}>
@@ -129,7 +143,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 }}>
                     <Text style={{ color: '#fff', fontSize: 14 }}>{message}</Text>
                 </View>
-                {highlight && (
+                {/* {highlight && (
                     <View style={[styles.card, { marginTop: 8, maxWidth: '80%' }]}>
                         <Text style={styles.productTitle}>{highlight.title}</Text>
                         <View style={styles.ratingRow}>
@@ -140,12 +154,11 @@ const MessageCard: React.FC<MessageCardProps> = ({
                         </View>
                         <Text style={styles.highlightDesc}>{highlight.description}</Text>
                     </View>
-                )}
+                )} */}
             </View>
         );
     }
 
-    // AI message (left side) - Original design with voting and error handling
     return (
         <View style={styles.card}>
             <View style={styles.headerRow}>
@@ -153,10 +166,9 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     <IconAssets.Frame />
                 </View>
                 <Text style={styles.timeText}>{time}</Text>
-                
-                {/* Show error indicator if there's an error */}
+
                 {error && (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={clearError}
                         style={{ marginLeft: 'auto', padding: 5 }}
                     >
@@ -165,7 +177,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 )}
             </View>
 
-            {/* Show global error message */}
             {error && (
                 <View style={{
                     backgroundColor: '#ffebee',
@@ -184,7 +195,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* Show agent status when streaming */}
             {isStreaming && agentStatus && (
                 <View style={{
                     backgroundColor: 'rgba(255, 106, 0, 0.1)',
@@ -194,10 +204,10 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     borderLeftWidth: 3,
                     borderLeftColor: '#FF6A00'
                 }}>
-                    <Text style={[styles.messageText, { 
-                        fontStyle: 'italic', 
+                    <Text style={[styles.messageText, {
+                        fontStyle: 'italic',
                         color: '#FF6A00',
-                        fontSize: 13 
+                        fontSize: 13
                     }]}>
                         {agentStatus}
                         {isStreaming && <Text style={{ color: '#FF6A00' }}>...</Text>}
@@ -205,25 +215,29 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* Message content with error styling */}
-            <Text style={[
-                styles.messageText,
-                isErrorMessage && {
-                    color: '#f44336',
-                    backgroundColor: '#ffebee',
-                    padding: 10,
-                    borderRadius: 6,
-                    fontFamily: 'monospace',
-                    fontSize: 13
-                }
-            ]}>
-                {message}
-                {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
-            </Text>
+            {isStreaming && !message ? (
+                <View style={{ paddingVertical: 6 }}>
+                    <TypingDots />
+                </View>
+            ) : (
+                <Text style={[
+                    styles.messageText,
+                    isErrorMessage && {
+                        color: '#f44336',
+                        backgroundColor: '#ffebee',
+                        padding: 10,
+                        borderRadius: 6,
+                        fontFamily: 'monospace',
+                        fontSize: 13
+                    }
+                ]}>
+                    {message}
+                    {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
+                </Text>
+            )}
 
-            {/* Retry button for error messages */}
             {isErrorMessage && (
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={{
                         backgroundColor: '#FF6A00',
                         padding: 8,
@@ -242,7 +256,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </TouchableOpacity>
             )}
 
-            {highlight && !isErrorMessage && (
+            {/* {highlight && !isErrorMessage && (
                 <View style={styles.highlightBox}>
                     <Text style={styles.productTitle}>{highlight.title}</Text>
                     <View style={styles.ratingRow}>
@@ -253,13 +267,13 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     </View>
                     <Text style={styles.highlightDesc}>{highlight.description}</Text>
                 </View>
-            )}
+            )} */}
 
             {/* Action buttons - hide for error messages */}
             {!isErrorMessage && (
                 <View style={styles.actionsRow}>
-                    <TouchableOpacity 
-                        style={styles.sourceButton} 
+                    <TouchableOpacity
+                        style={styles.sourceButton}
                         onPress={() => setSourceVisible(true)}
                         disabled={sources.length === 0}
                     >
@@ -273,36 +287,36 @@ const MessageCard: React.FC<MessageCardProps> = ({
 
                     <View style={styles.voteButtons}>
                         {liked || (hasVoted && voteType === 'upvote') ? (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 disabled
                                 style={styles.voteButton}
                             >
-                                <IconAssets.ThumbsUpBold />
+                                <IconAssets.ThumbsUpBold width={25} height={25} />
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={handleLike}
                                 style={styles.voteButton}
                                 activeOpacity={0.7}
                             >
-                                <IconAssets.ThumbsUp />
+                                <IconAssets.ThumbsUp width={25} height={25} />
                             </TouchableOpacity>
                         )}
-                        
+
                         {disliked || (hasVoted && voteType === 'downvote') ? (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 disabled
                                 style={styles.voteButton}
                             >
-                                <IconAssets.ThumbsDownBold />
+                                <IconAssets.ThumbsDownBold width={25} height={25} />
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={handleDislike}
                                 style={styles.voteButton}
                                 activeOpacity={0.7}
                             >
-                                <IconAssets.ThumbsDown />
+                                <IconAssets.ThumbsDown width={25} height={25} />
                             </TouchableOpacity>
                         )}
                     </View>

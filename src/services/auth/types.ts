@@ -1,6 +1,3 @@
-// src/services/auth/types.ts
-// Authentication response types based on your FastAPI backend
-
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;
@@ -23,7 +20,7 @@ export interface UserDetailResponse {
 export interface LoginRequest {
   email: string;
   password: string;
-  totp_code?: string; // Add this field - it's optional but expected by backend
+  totp_code?: string;
 }
 
 export interface ChangePasswordRequest {
@@ -35,13 +32,11 @@ export interface RefreshTokenRequest {
   refresh_token: string;
 }
 
-// Error types that your backend might return
 export interface AuthError {
   detail: string;
   type?: 'email_not_verified' | 'invalid_credentials' | 'password_change_required';
 }
 
-// Auth state for your app
 export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;

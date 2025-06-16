@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+
 import { AuthApiClient } from '../services/auth/AuthApiClient';
 import { AuthStorage } from '../services/auth/storage';
 import { AuthState, UserDetailResponse, TokenResponse } from '../services/auth/types';
 import { API_CONFIG } from '../config/environment';
+import { Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Create the auth API client using environment config
 const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
@@ -32,7 +36,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload, error: null };
-    
+
     case 'LOGIN_SUCCESS':
       return {
         ...state,
@@ -42,7 +46,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         tokens: action.payload.tokens,
         error: null,
       };
-    
+
     case 'LOGIN_ERROR':
       return {
         ...state,
@@ -52,20 +56,20 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         tokens: null,
         error: action.payload,
       };
-    
+
     case 'LOGOUT':
     case 'SESSION_EXPIRED':
       return initialState;
-    
+
     case 'CLEAR_ERROR':
       return { ...state, error: null };
-    
+
     case 'UPDATE_USER':
       return { ...state, user: action.payload };
-    
+
     case 'TOKEN_REFRESHED':
       return { ...state, tokens: action.payload };
-    
+
     default:
       return state;
   }
@@ -108,7 +112,7 @@ export function AuthProvider(props: AuthProviderProps) {
       console.log('=== Validating current session ===');
       console.log('Using Auth API URL:', API_CONFIG.AUTH_API_BASE_URL);
       console.log('Using Tenant ID:', API_CONFIG.TENANT_ID);
-      
+
       // Call /api/auth/me to check if session is valid
       const response = await fetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
         method: 'GET',
@@ -146,17 +150,31 @@ export function AuthProvider(props: AuthProviderProps) {
    */
   const handleSessionExpired = async () => {
     console.log('🚨 Session expired - logging out user');
-    
+
     try {
       // Clear local storage
       await AuthStorage.clearAuthData();
-      
+
       // Update state to logged out
       dispatch({ type: 'SESSION_EXPIRED' });
-      
+
       // Stop session checking
       stopPeriodicSessionCheck();
-      
+
+      Alert.alert(
+        'Session Expired',
+        'Your session has expired. Please log in again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              logout();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+
     } catch (error) {
       console.error('Error handling session expiry:', error);
     }
@@ -171,13 +189,13 @@ export function AuthProvider(props: AuthProviderProps) {
     }
 
     console.log('🔄 Starting periodic session validation (every 60 seconds)');
-    
+
     sessionCheckInterval.current = setInterval(async () => {
       if (state.isAuthenticated && state.tokens?.access_token) {
         console.log('⏰ Periodic session check...');
-        
+
         const isValid = await validateCurrentSession();
-        
+
         if (!isValid) {
           await handleSessionExpired();
         }
@@ -213,15 +231,15 @@ export function AuthProvider(props: AuthProviderProps) {
     }
 
     console.log('🔍 Validating session before API request...');
-    
+
     const isValid = await validateCurrentSession();
     lastSessionCheck.current = now;
-    
+
     if (!isValid) {
       await handleSessionExpired();
       return false;
     }
-    
+
     return true;
   };
 
@@ -232,7 +250,7 @@ export function AuthProvider(props: AuthProviderProps) {
 
       const hasStoredAuth = await AuthStorage.hasAuthData();
       console.log('Has stored auth data:', hasStoredAuth);
-      
+
       if (!hasStoredAuth) {
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
@@ -251,7 +269,7 @@ export function AuthProvider(props: AuthProviderProps) {
       // Validate the stored session
       const isValid = await validateCurrentSession();
       console.log('Stored session valid:', isValid);
-      
+
       if (isValid) {
         // Session is valid, restore auth state
         dispatch({
@@ -265,7 +283,7 @@ export function AuthProvider(props: AuthProviderProps) {
             },
           },
         });
-        
+
         // Start periodic session checking
         startPeriodicSessionCheck();
       } else {
@@ -274,7 +292,7 @@ export function AuthProvider(props: AuthProviderProps) {
           try {
             const newTokens = await authApiClient.refreshToken(refreshToken);
             await AuthStorage.saveTokens(newTokens);
-            
+
             dispatch({
               type: 'LOGIN_SUCCESS',
               payload: {
@@ -282,7 +300,7 @@ export function AuthProvider(props: AuthProviderProps) {
                 tokens: newTokens,
               },
             });
-            
+
             // Start periodic session checking
             startPeriodicSessionCheck();
           } catch (error) {
@@ -308,7 +326,7 @@ export function AuthProvider(props: AuthProviderProps) {
       console.log('Email:', email);
       console.log('Using Auth API URL:', API_CONFIG.AUTH_API_BASE_URL);
       console.log('Using Tenant ID:', API_CONFIG.TENANT_ID);
-      
+
       dispatch({ type: 'SET_LOADING', payload: true });
 
       // Step 1: Authenticate and get tokens
@@ -335,20 +353,20 @@ export function AuthProvider(props: AuthProviderProps) {
         type: 'LOGIN_SUCCESS',
         payload: { user, tokens },
       });
-      
+
       // Step 5: Start session monitoring
       console.log('Step 5: Starting session monitoring...');
       startPeriodicSessionCheck();
-      
+
       console.log('=== AuthContext login completed successfully ===');
 
     } catch (error) {
       console.log('=== AuthContext login error ===');
       console.log('Error:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       console.log('Error message:', errorMessage);
-      
+
       dispatch({ type: 'LOGIN_ERROR', payload: errorMessage });
       throw error;
     }

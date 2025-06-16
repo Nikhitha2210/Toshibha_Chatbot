@@ -1,4 +1,3 @@
-// src/services/auth/AuthApiClient.ts
 import { TokenResponse, UserDetailResponse } from './types';
 
 export class AuthApiClient {
@@ -42,45 +41,33 @@ export class AuthApiClient {
 
   async login(email: string, password: string): Promise<TokenResponse> {
     try {
-      console.log('=== AuthApiClient Login Start ===');
-      console.log('Email:', email);
-      console.log('URL:', `${this.baseUrl}/api/auth/login`);
-      
+
       const requestBody = {
         email: email,
         password: password,
         totp_code: ""
       };
-      
-      console.log('Request headers:', this.getHeaders());
-      console.log('Request body:', requestBody);
-      
+
       const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/login`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(requestBody),
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('Error response text:', errorText);
-        
+
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { detail: errorText || 'Login failed' };
         }
-        
-        console.log('Parsed error data:', errorData);
 
         if (response.status === 403 && errorData.detail === 'email_not_verified') {
           throw new Error('email_not_verified');
         }
-        
+
         if (response.status === 401) {
           throw new Error('Invalid email or password');
         }
@@ -93,28 +80,21 @@ export class AuthApiClient {
       }
 
       const responseText = await response.text();
-      console.log('Success response text:', responseText);
-      
+
       let tokenData;
       try {
         tokenData = JSON.parse(responseText);
-        console.log('Parsed token data:', tokenData);
       } catch (parseError) {
-        console.log('JSON parse error:', parseError);
         throw new Error('Invalid response format from server');
       }
 
       if (!tokenData.access_token || !tokenData.refresh_token) {
-        console.log('Missing required token fields');
         throw new Error('Invalid token response from server');
       }
 
-      console.log('=== AuthApiClient Login Success ===');
       return tokenData as TokenResponse;
-      
+
     } catch (error) {
-      console.log('=== AuthApiClient Login Error ===');
-      console.log('Error:', error);
       if (error instanceof Error) {
         throw error;
       }
@@ -124,8 +104,6 @@ export class AuthApiClient {
 
   async getUserDetails(accessToken: string): Promise<UserDetailResponse> {
     try {
-      console.log('=== Getting User Details ===');
-      
       const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/me`, {
         method: "GET",
         headers: this.getHeaders({
@@ -133,27 +111,22 @@ export class AuthApiClient {
         }),
       });
 
-      console.log('User details response status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('User details error:', errorText);
-        
+
         if (response.status === 401) {
           throw new Error('Session expired. Please login again.');
         }
-        
+
         throw new Error('Failed to get user information');
       }
 
       const responseText = await response.text();
       const userData = JSON.parse(responseText);
-      console.log('User details retrieved:', userData);
-      
+
       return userData as UserDetailResponse;
-      
+
     } catch (error) {
-      console.log('Get user details error:', error);
       if (error instanceof Error) {
         throw error;
       }
@@ -175,7 +148,7 @@ export class AuthApiClient {
 
       const tokenData = await response.json();
       return tokenData as TokenResponse;
-      
+
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -194,7 +167,7 @@ export class AuthApiClient {
       });
 
       return { valid: response.ok };
-      
+
     } catch (error) {
       return { valid: false };
     }

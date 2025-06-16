@@ -46,8 +46,8 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
 
     return (
         <>
-            <ScrollView 
-                horizontal 
+            <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.pillsContainer}
             >
@@ -94,8 +94,8 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                                 <Text style={styles.closeButtonText}>✕</Text>
                             </TouchableOpacity>
                         </View>
-                        
-                        <ScrollView 
+
+                        <ScrollView
                             style={styles.imageScrollContainer}
                             contentContainerStyle={styles.imageScrollContent}
                             maximumZoomScale={3}
@@ -113,7 +113,6 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                                         // You could set a state here to show a "Image not available" message
                                     }}
                                     onLoad={() => {
-                                        console.log('Image loaded successfully for:', selectedSource?.filename);
                                     }}
                                 />
                             )}
@@ -126,7 +125,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                                 </View>
                             )}
                         </ScrollView>
-                        
+
                         <View style={styles.modalFooter}>
                             <Text style={styles.pageInfo}>
                                 {selectedSource && formatPageText(selectedSource.pages)}

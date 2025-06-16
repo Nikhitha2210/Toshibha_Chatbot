@@ -1,4 +1,3 @@
-// Fixed ChatApiClient with correct messages format for backend
 import uuid from 'react-native-uuid';
 
 const uuidv4 = () => uuid.v4() as string;
@@ -26,7 +25,7 @@ export interface ChatRequest {
   qid: string;
   uid: string;
   sid: string;
-  messages: Array<{content: string; isBot: boolean}>; // Fixed: Now array of objects
+  messages: Array<{ content: string; isBot: boolean }>;
   collection: string;
 }
 
@@ -67,12 +66,11 @@ export class ChatApiClient {
     onError: (error: string) => void
   ): Promise<string> {
     const messageId = uuidv4();
-    
+
     try {
-      // Format previous messages correctly for the backend
       const messagesHistory = previousMessages.map(msg => ({
         content: msg.message,
-        isBot: !msg.isUser  // Convert isUser to isBot (inverted)
+        isBot: !msg.isUser
       }));
 
       const chatRequest: ChatRequest = {
@@ -80,13 +78,9 @@ export class ChatApiClient {
         qid: messageId,
         uid: this.userId,
         sid: this.sessionId,
-        messages: messagesHistory, // Now sending array of objects
+        messages: messagesHistory,
         collection: 'chatbot'
       };
-
-      console.log('=== Chat Request ===');
-      console.log('URL:', `${this.baseUrl}/run`);
-      console.log('Request:', chatRequest);
 
       // Start status monitoring
       const statusInterval = this.startStatusMonitoring(messageId, onStatus);
@@ -113,37 +107,33 @@ export class ChatApiClient {
 
       // Parse the response and simulate streaming
       const lines = fullResponseText.split('\n');
-      
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        
+
         if (line && line.startsWith('data: ')) {
           try {
-            const data = line.slice(6); // Remove "data: " prefix
-            
+            const data = line.slice(6);
+
             if (data === '[DONE]') {
               clearInterval(statusInterval);
               onComplete();
               return accumulatedResponse;
             }
 
-            // Try to parse as JSON first
             try {
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 accumulatedResponse += parsed.content;
                 onChunk(parsed.content);
-                
-                // Add a small delay to simulate streaming
+
                 await new Promise(resolve => setTimeout(resolve, 50));
               }
             } catch (parseError) {
-              // If not JSON, treat as plain text
               if (data && data !== '') {
                 accumulatedResponse += data;
                 onChunk(data);
-                
-                // Add a small delay to simulate streaming
+
                 await new Promise(resolve => setTimeout(resolve, 50));
               }
             }
@@ -151,11 +141,9 @@ export class ChatApiClient {
             console.log('Error processing line:', line, error);
           }
         } else if (line && !line.startsWith('data:') && line !== '') {
-          // Handle plain text responses
           accumulatedResponse += line + ' ';
           onChunk(line + ' ');
-          
-          // Add a small delay to simulate streaming
+
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -208,7 +196,7 @@ export class ChatApiClient {
     } else if (agentStatus.includes("getReleatedChatText")) {
       return "Getting related chat history";
     }
-    
+
     return "";
   }
 
@@ -232,7 +220,6 @@ export class ChatApiClient {
         throw new Error(`Vote failed: ${response.status}`);
       }
 
-      console.log(`Vote ${vote} submitted for message ${messageId}`);
     } catch (error) {
       console.error('Vote submission error:', error);
       throw error;
@@ -268,7 +255,6 @@ export class ChatApiClient {
         throw new Error(`Feedback failed: ${response.status}`);
       }
 
-      console.log('Feedback submitted for message', messageId);
     } catch (error) {
       console.error('Feedback submission error:', error);
       throw error;

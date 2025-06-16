@@ -13,7 +13,10 @@ export const getStyles = (theme: 'light' | 'dark') => {
             paddingHorizontal: 10,
             borderRadius: 10,
             borderColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
-            borderWidth: 1
+            borderWidth: 1,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
         },
         askText: {
             color: theme === 'dark' ? Colors.dark.text : Colors.light.text,

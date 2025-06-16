@@ -1,8 +1,6 @@
-// src/services/auth/storage.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TokenResponse, UserDetailResponse } from './types';
 
-// Storage keys - keeping them consistent and prefixed
 const STORAGE_KEYS = {
   ACCESS_TOKEN: '@auth/access_token',
   REFRESH_TOKEN: '@auth/refresh_token',
@@ -11,9 +9,8 @@ const STORAGE_KEYS = {
 } as const;
 
 export class AuthStorage {
-  /**
-   * Save authentication tokens securely
-   */
+
+  // Save authentication tokens securely
   static async saveTokens(tokens: TokenResponse): Promise<void> {
     try {
       await Promise.all([
@@ -26,9 +23,7 @@ export class AuthStorage {
     }
   }
 
-  /**
-   * Get stored authentication tokens
-   */
+  // Get stored authentication tokens
   static async getTokens(): Promise<{ accessToken: string | null; refreshToken: string | null }> {
     try {
       const [accessToken, refreshToken] = await Promise.all([
@@ -49,9 +44,7 @@ export class AuthStorage {
     }
   }
 
-  /**
-   * Save user data
-   */
+  //Save user data
   static async saveUserData(userData: UserDetailResponse): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
@@ -61,9 +54,7 @@ export class AuthStorage {
     }
   }
 
-  /**
-   * Get stored user data
-   */
+  //Get stored user data
   static async getUserData(): Promise<UserDetailResponse | null> {
     try {
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
@@ -74,9 +65,7 @@ export class AuthStorage {
     }
   }
 
-  /**
-   * Clear all authentication data (for logout)
-   */
+  //Clear all authentication data (for logout)
   static async clearAuthData(): Promise<void> {
     try {
       await AsyncStorage.multiRemove([
@@ -87,13 +76,10 @@ export class AuthStorage {
       ]);
     } catch (error) {
       console.error('Failed to clear auth data:', error);
-      // Don't throw error here - logout should always succeed locally
     }
   }
 
-  /**
-   * Check if user has stored authentication data
-   */
+  //Check if user has stored authentication data
   static async hasAuthData(): Promise<boolean> {
     try {
       const { accessToken } = await this.getTokens();
@@ -103,9 +89,7 @@ export class AuthStorage {
     }
   }
 
-  /**
-   * Update just the access token (for token refresh)
-   */
+  //Update just the access token (for token refresh)
   static async updateAccessToken(newAccessToken: string): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, newAccessToken);
