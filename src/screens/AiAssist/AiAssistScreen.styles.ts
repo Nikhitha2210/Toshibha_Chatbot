@@ -8,7 +8,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
         container: {
             flex: 1,
             backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background,
-            paddingTop: 20
         },
         topBar: {
             flexDirection: 'row',
@@ -25,23 +24,41 @@ export const getStyles = (theme: 'light' | 'dark') => {
             color: Colors.dark.subText,
             fontWeight: '600',
         },
-        messagesContainer: {
-            flex: 1,
-            marginBottom: 120, // Space for input
+        newChatButton: {
+            padding: 8,
+            borderRadius: 8,
+            minWidth: 40,
+            minHeight: 40,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'transparent',
         },
+        
+        // ✅ FIXED MESSAGES CONTAINER - proper flex structure
+        messagesContainer: {
+            flex: 1, // Takes remaining space
+            marginBottom: 120, // Space for absolute positioned input
+        },
+        
+        // ✅ FIXED SCROLLVIEW - full height within container
         scrollView: {
             flex: 1,
+            backgroundColor: 'transparent',
         },
+        
+        // ✅ FIXED SCROLL CONTENT - proper padding for input space
         scrollContent: {
             padding: 20,
-            paddingBottom: 40,
-            minHeight: SCREEN_HEIGHT * 0.5, // Ensure minimum scrollable height
+            paddingBottom: 60, // Extra space for last message above input
+            flexGrow: 1,
+            minHeight: SCREEN_HEIGHT * 0.3, // Minimum scrollable height
         },
+        
         emptyState: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            minHeight: 200,
+            minHeight: SCREEN_HEIGHT * 0.4,
         },
         emptyStateText: {
             color: theme === 'dark' ? Colors.dark.subText : Colors.light.lightText,
@@ -49,6 +66,8 @@ export const getStyles = (theme: 'light' | 'dark') => {
             textAlign: 'center',
             fontStyle: 'italic',
         },
+        
+        // ✅ FIXED INPUT WRAPPER - absolute positioning keeps it at bottom
         inputWrapper: {
             position: 'absolute',
             bottom: 0,
@@ -58,26 +77,29 @@ export const getStyles = (theme: 'light' | 'dark') => {
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             paddingTop: 1,
-            elevation: 10,
-            shadowColor: '#000',
+            elevation: 10, // Android shadow
+            shadowColor: '#000', // iOS shadow
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
             shadowRadius: 3.84,
         },
+        
         inputContainer: {
             backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background2,
             borderTopLeftRadius: 19,
             borderTopRightRadius: 19,
             paddingVertical: 20,
-            paddingHorizontal: 20
+            paddingHorizontal: 20,
+            paddingBottom: 25, // Extra padding for Samsung devices
         },
+        
         leftEdgeGestureArea: {
             position: 'absolute',
             left: 0,
-            top: 120, // Start below the header and topBar to avoid button interference
+            top: 120,
             width: 30,
-            height: '70%', // Don't cover full height
-            zIndex: 1, // Lower z-index to not block buttons
+            height: '70%',
+            zIndex: 1,
         }
     });
 }

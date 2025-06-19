@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -75,51 +74,44 @@ const MessageCard: React.FC<MessageCardProps> = ({
     const [untrue, setUntrue] = useState(false);
     const [unhelpful, setUnhelpful] = useState(false);
 
-    const [liked, setLiked] = useState(hasVoted && voteType === 'upvote');
-    const [disliked, setDisliked] = useState(hasVoted && voteType === 'downvote');
+    const [currentVoteType, setCurrentVoteType] = useState<'upvote' | 'downvote' | null>(
+        hasVoted ? voteType || null : null
+    );
+    const [isVoting, setIsVoting] = useState(false);
 
     const { theme } = useThemeContext();
     const { submitVote, error, clearError } = useChat();
 
     const styles = getStyles(theme);
-
     const ThemedThumbsUpIcon = getThemedIcon('ThumbsUp', theme);
 
     const isErrorMessage = message.toLowerCase().includes('error:') ||
         message.toLowerCase().includes('failed') ||
         message.toLowerCase().includes('network request failed');
 
-    const handleLike = async () => {
-        if (liked || (hasVoted && voteType === 'upvote')) return;
+    const handleVote = async (voteTypeToSubmit: 'upvote' | 'downvote') => {
+        if (isVoting) return;
 
         try {
-            setLiked(true);
-            setDisliked(false);
+            setIsVoting(true);
 
-            await submitVote(message, 'upvote');
+            if (currentVoteType === voteTypeToSubmit) {
+                setCurrentVoteType(null);
+                return;
+            }
 
-        } catch (error) {
-            console.error('❌ Upvote error:', error);
-            setLiked(false);
-            Alert.alert('Error', 'Failed to submit vote. Please try again.');
-        }
-    };
+            setCurrentVoteType(voteTypeToSubmit);
+            await submitVote(message, voteTypeToSubmit);
 
-    const handleDislike = async () => {
-        if (disliked || (hasVoted && voteType === 'downvote')) return;
-
-        try {
-            setDisliked(true);
-            setLiked(false);
-            setFeedbackVisible(true);
-
-            await submitVote(message, 'downvote');
+            if (voteTypeToSubmit === 'downvote') {
+                setFeedbackVisible(true);
+            }
 
         } catch (error) {
-            console.error('❌ Downvote error:', error);
-            setDisliked(false);
-            setFeedbackVisible(false);
+            setCurrentVoteType(hasVoted ? voteType || null : null);
             Alert.alert('Error', 'Failed to submit vote. Please try again.');
+        } finally {
+            setIsVoting(false);
         }
     };
 
@@ -145,18 +137,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 }}>
                     <Text style={{ color: '#fff', fontSize: 14 }}>{message}</Text>
                 </View>
-                {/* {highlight && (
-                    <View style={[styles.card, { marginTop: 8, maxWidth: '80%' }]}>
-                        <Text style={styles.productTitle}>{highlight.title}</Text>
-                        <View style={styles.ratingRow}>
-                            <Icon name="star" size={16} color="#FFC107" />
-                            <Text style={styles.ratingText}>
-                                {highlight.rating} ({highlight.reviews.toLocaleString()})
-                            </Text>
-                        </View>
-                        <Text style={styles.highlightDesc}>{highlight.description}</Text>
-                    </View>
-                )} */}
             </View>
         );
     }
@@ -258,20 +238,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </TouchableOpacity>
             )}
 
-            {/* {highlight && !isErrorMessage && (
-                <View style={styles.highlightBox}>
-                    <Text style={styles.productTitle}>{highlight.title}</Text>
-                    <View style={styles.ratingRow}>
-                        <Icon name="star" size={16} color="#FFC107" />
-                        <Text style={styles.ratingText}>
-                            {highlight.rating} ({highlight.reviews.toLocaleString()})
-                        </Text>
-                    </View>
-                    <Text style={styles.highlightDesc}>{highlight.description}</Text>
-                </View>
-            )} */}
-
-            {/* Action buttons - hide for error messages */}
             {!isErrorMessage && (
                 <View style={styles.actionsRow}>
                     <TouchableOpacity
@@ -288,40 +254,45 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     </TouchableOpacity>
 
                     <View style={styles.voteButtons}>
-                        {liked || (hasVoted && voteType === 'upvote') ? (
-                            <TouchableOpacity
-                                disabled
-                                style={styles.voteButton}
-                            >
+                        <TouchableOpacity
+                            onPress={() => handleVote('upvote')}
+                            style={[
+                                styles.voteButton,
+                                currentVoteType === 'upvote' && { 
+                                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(34, 197, 94, 0.3)'
+                                }
+                            ]}
+                            disabled={isVoting}
+                            activeOpacity={0.7}
+                        >
+                            {currentVoteType === 'upvote' ? (
                                 <IconAssets.ThumbsUpBold width={25} height={25} />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                onPress={handleLike}
-                                style={styles.voteButton}
-                                activeOpacity={0.7}
-                            >
-                                {ThemedThumbsUpIcon && <ThemedThumbsUpIcon width={25} height={25} />}
-                                {/* <IconAssets.ThumbsUp width={25} height={25} /> */}
-                            </TouchableOpacity>
-                        )}
+                            ) : (
+                                ThemedThumbsUpIcon && <ThemedThumbsUpIcon width={25} height={25} />
+                            )}
+                        </TouchableOpacity>
 
-                        {disliked || (hasVoted && voteType === 'downvote') ? (
-                            <TouchableOpacity
-                                disabled
-                                style={styles.voteButton}
-                            >
+                        <TouchableOpacity
+                            onPress={() => handleVote('downvote')}
+                            style={[
+                                styles.voteButton,
+                                currentVoteType === 'downvote' && { 
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(239, 68, 68, 0.3)'
+                                }
+                            ]}
+                            disabled={isVoting}
+                            activeOpacity={0.7}
+                        >
+                            {currentVoteType === 'downvote' ? (
                                 <IconAssets.ThumbsDownBold width={25} height={25} />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                onPress={handleDislike}
-                                style={styles.voteButton}
-                                activeOpacity={0.7}
-                            >
+                            ) : (
                                 <IconAssets.ThumbsDown width={25} height={25} />
-                            </TouchableOpacity>
-                        )}
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             )}
@@ -335,6 +306,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 setHarmful={setHarmful}
                 setUntrue={setUntrue}
                 setUnhelpful={setUnhelpful}
+                messageText={message}
             />
 
             <SourceModal

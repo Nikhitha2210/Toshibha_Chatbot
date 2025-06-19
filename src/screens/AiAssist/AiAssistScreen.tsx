@@ -1,8 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react'
-
-import { ActivityIndicator, Animated, Dimensions, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { 
+    ActivityIndicator, 
+    Animated, 
+    Dimensions, 
+    ScrollView, 
+    Text, 
+    TouchableOpacity, 
+    View,
+    SafeAreaView,
+    Platform
+} from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { getStyles } from './AiAssistScreen.styles'
 import Header from '../../components/header'
@@ -13,6 +23,14 @@ import { useChat } from '../../context/ChatContext';
 import Sidebar from '../../components/Sidebar';
 import { useThemeContext } from '../../context/ThemeContext';
 
+type RootStackParamList = {
+    Login: undefined;
+    Home: undefined;
+    AiAssist: undefined;
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const AiAssistScreen = () => {
@@ -20,12 +38,12 @@ const AiAssistScreen = () => {
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
     const scrollViewRef = useRef<ScrollView>(null);
 
-    const { messages, error, clearError, sendMessage } = useChat();
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp>();
+    const { messages, error, clearError, startNewSession } = useChat();
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
-    const ThemedBackIcon = getThemedIcon('ArrowLeft', theme);
+    const ThemedNewChatIcon = getThemedIcon('NewChat', theme);
 
     useEffect(() => {
         if (messages.length > 0) {
@@ -52,6 +70,12 @@ const AiAssistScreen = () => {
         }).start(() => setModalVisible(false));
     };
 
+    const handleNewChat = () => {
+        console.log('🆕 Starting new chat session and navigating to home');
+        startNewSession();
+        navigation.navigate('Home');
+    };
+
     const swipeGesture = Gesture.Pan()
         .onUpdate((e) => {
             if (e.absoluteX < 50 && e.translationX > 80) {
@@ -61,95 +85,100 @@ const AiAssistScreen = () => {
         .runOnJS(true);
 
     return (
-        <View style={styles.container}>
-            <Header onMenuPress={openMenu} />
+        <SafeAreaView style={{ flex: 1 }}>
+            <View style={styles.container}>
+                <Header onMenuPress={openMenu} />
 
-            <View style={styles.topBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        {ThemedBackIcon && <ThemedBackIcon />}
-                    </TouchableOpacity>
+                <View style={styles.topBar}>
                     <Text style={styles.topBarTitle}>Ask Toshiba</Text>
+                    
+                    <TouchableOpacity 
+                        onPress={handleNewChat}
+                        style={styles.newChatButton}
+                        activeOpacity={0.7}
+                    >
+                        {ThemedNewChatIcon && <ThemedNewChatIcon width={24} height={24} />}
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => console.log('Options')}>
-                    <IconAssets.VerticalDots />
-                </TouchableOpacity>
-            </View>
 
-            {error && (
-                <View style={{
-                    backgroundColor: '#ffebee',
-                    padding: 10,
-                    marginHorizontal: 10,
-                    borderRadius: 8,
-                    borderLeftWidth: 4,
-                    borderLeftColor: '#f44336',
-                    marginBottom: 10
-                }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ color: '#c62828', fontSize: 14, flex: 1 }}>
-                            ⚠️ {error}
-                        </Text>
-                        <TouchableOpacity onPress={clearError} style={{ marginLeft: 10 }}>
-                            <Text style={{ color: '#1976d2', fontSize: 12 }}>✕</Text>
-                        </TouchableOpacity>
+                {error && (
+                    <View style={{
+                        backgroundColor: '#ffebee',
+                        padding: 10,
+                        marginHorizontal: 10,
+                        borderRadius: 8,
+                        borderLeftWidth: 4,
+                        borderLeftColor: '#f44336',
+                        marginBottom: 10
+                    }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: '#c62828', fontSize: 14, flex: 1 }}>
+                                ⚠️ {error}
+                            </Text>
+                            <TouchableOpacity onPress={clearError} style={{ marginLeft: 10 }}>
+                                <Text style={{ color: '#1976d2', fontSize: 12 }}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                <View style={styles.messagesContainer}>
+                    <ScrollView
+                        ref={scrollViewRef}
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={true}
+                        keyboardShouldPersistTaps="handled"
+                        keyboardDismissMode="interactive"
+                        bounces={true}
+                        alwaysBounceVertical={true}
+                        scrollEnabled={true}
+                        nestedScrollEnabled={false}
+                    >
+                        {messages.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Text style={styles.emptyStateText}>
+                                    Ask me anything about Toshiba products!
+                                </Text>
+                            </View>
+                        ) : (
+                            <>
+                                {messages.map((msg) => (
+                                    <MessageCard
+                                        key={msg.id}
+                                        time={msg.time}
+                                        message={msg.message}
+                                        isUser={msg.isUser}
+                                        isStreaming={msg.isStreaming || false}
+                                        agentStatus={msg.agentStatus}
+                                        sources={msg.sources || []}
+                                        hasVoted={msg.hasVoted || false}
+                                        voteType={msg.voteType}
+                                        highlight={msg.highlight}
+                                    />
+                                ))}
+                            </>
+                        )}
+                    </ScrollView>
+                </View>
+
+                <View style={styles.inputWrapper}>
+                    <View style={styles.inputContainer}>
+                        <PromptInput />
                     </View>
                 </View>
-            )}
 
-            <View style={styles.messagesContainer}>
-                <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={true}
-                    keyboardShouldPersistTaps="handled"
-                    scrollEnabled={true}
-                    bounces={true}
-                    alwaysBounceVertical={true}
-                    contentInsetAdjustmentBehavior="automatic"
-                >
-                    {messages.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <ActivityIndicator size="large" color="#1B4965" />
-                        </View>
-                    ) : (
-                        <>
-                            {messages.map((msg) => (
-                                <MessageCard
-                                    key={msg.id}
-                                    time={msg.time}
-                                    message={msg.message}
-                                    isUser={msg.isUser}
-                                    isStreaming={msg.isStreaming || false}
-                                    agentStatus={msg.agentStatus}
-                                    sources={msg.sources || []}
-                                    hasVoted={msg.hasVoted || false}
-                                    voteType={msg.voteType}
-                                    highlight={msg.highlight}
-                                />
-                            ))}
-                        </>
-                    )}
-                </ScrollView>
+                <GestureDetector gesture={swipeGesture}>
+                    <View style={styles.leftEdgeGestureArea} />
+                </GestureDetector>
+
+                <Sidebar
+                    visible={isModalVisible}
+                    slideAnim={slideAnim}
+                    onClose={closeMenu}
+                />
             </View>
-
-            <View style={styles.inputWrapper}>
-                <View style={styles.inputContainer}>
-                    <PromptInput />
-                </View>
-            </View>
-
-            <GestureDetector gesture={swipeGesture}>
-                <View style={styles.leftEdgeGestureArea} />
-            </GestureDetector>
-
-            <Sidebar
-                visible={isModalVisible}
-                slideAnim={slideAnim}
-                onClose={closeMenu}
-            />
-        </View>
+        </SafeAreaView>
     )
 }
 

@@ -1,148 +1,254 @@
-import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, PermissionsAndroid, Platform } from "react-native";
-import Voice from '@react-native-voice/voice';
-import { usePrompt } from "../context/PromptContext";
+import { useState, useRef, useCallback } from 'react';
+import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 
 export const useVoiceInput = () => {
-    const [isListening, setIsListening] = useState(false);
-    const [shouldFocusPromptInput, setShouldFocusPromptInput] = useState(false);
+  const [inputText, setInputText] = useState<string>('');
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [voiceInputText, setVoiceInputText] = useState<string>('');
+  const [shouldFocusPromptInput, setShouldFocusPromptInput] = useState<boolean>(false);
+  
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isRecordingRef = useRef<boolean>(false);
+  const accumulatedTextRef = useRef<string>('');
+
+  // Properly typed event handlers
+  const onSpeechStart = useCallback(() => {
+    console.log('🎤 Speech started');
+    setIsListening(true);
+    accumulatedTextRef.current = '';
     
-    const { inputText, setInputText } = usePrompt();
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
+  const onSpeechResults = useCallback((event: SpeechResultsEvent) => {
+    console.log('🎤 Speech results:', event.value);
+    const recognizedText = event.value?.[0] || '';
+    accumulatedTextRef.current = recognizedText;
+    setVoiceInputText(recognizedText);
+    setInputText(recognizedText);
     
-    const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const lastResultTimeRef = useRef<number>(0);
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    
+    silenceTimerRef.current = setTimeout(() => {
+      console.log('🤫 Auto-stopping due to silence');
+      stopListening();
+    }, 2000);
+  }, []);
 
-    useEffect(() => {
-        Voice.onSpeechResults = (event: { value?: string[] }) => {
-            const text = event.value?.[0] ?? '';
-            if (text.trim()) {
-                setInputText(text);
-                lastResultTimeRef.current = Date.now();
-                console.log('Got final result:', text);
-            }
-        };
+  const onSpeechPartialResults = useCallback((event: SpeechResultsEvent) => {
+    console.log('🎤 Partial results:', event.value);
+    const partialText = event.value?.[0] || '';
+    setVoiceInputText(partialText);
+    setInputText(partialText);
+    
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    
+    silenceTimerRef.current = setTimeout(() => {
+      console.log('🤫 Auto-stopping due to silence (partial)');
+      stopListening();
+    }, 2000);
+  }, []);
 
-        Voice.onSpeechPartialResults = (event: { value?: string[] }) => {
-            const text = event.value?.[0] ?? '';
-            if (text.trim()) {
-                setInputText(text);
-                lastResultTimeRef.current = Date.now();
-                console.log('Got partial result:', text);
-            }
-        };
+  const onSpeechEnd = useCallback(() => {
+    console.log('🎤 Speech ended');
+    setIsListening(false);
+    isRecordingRef.current = false;
+    
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
 
-        Voice.onSpeechError = (error) => {
-            console.error('Speech Error:', error);
-        };
+  const onSpeechError = useCallback((event: SpeechErrorEvent) => {
+    console.log('❌ Speech error details:', event.error);
+    setIsListening(false);
+    isRecordingRef.current = false;
+    
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    
+    const errorCode = event.error?.code || event.error?.message || 'unknown';
+    console.log('Error code:', errorCode);
+    
+    if (errorCode !== '7' && errorCode !== 'network') {
+      switch (errorCode) {
+        case '6':
+        case 'audio':
+          console.log('Audio error - retrying...');
+          break;
+        case '8':
+        case 'server':
+          Alert.alert('Voice Error', 'Server temporarily unavailable. Please try again.');
+          break;
+        case '9':
+        case 'insufficient':
+          Alert.alert('Voice Error', 'Could not hear clearly. Please speak louder.');
+          break;
+        default:
+          console.log('Voice error (ignored):', errorCode);
+      }
+    }
+  }, []);
 
-        checkAndroidPermission();
+  // Empty handlers for unused events (to satisfy TypeScript)
+  const onSpeechVolumeChanged = useCallback(() => {
+    // Do nothing - we don't need volume change events
+  }, []);
 
-        return () => {
-            if (autoStopTimeoutRef.current) {
-                clearTimeout(autoStopTimeoutRef.current);
-            }
-            Voice.destroy().then(Voice.removeAllListeners);
-        };
-    }, []);
+  const onSpeechRecognized = useCallback(() => {
+    // Do nothing - we don't need recognition events
+  }, []);
 
-    const checkAndroidPermission = async () => {
-        if (Platform.OS === 'android') {
-            const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-                {
-                    title: 'Microphone Permission',
-                    message: 'This app needs access to your microphone to recognize speech',
-                    buttonNeutral: 'Ask Me Later',
-                    buttonNegative: 'Cancel',
-                    buttonPositive: 'OK',
-                }
-            );
+  // Setup voice listeners with proper function handlers
+  const setupVoiceListeners = useCallback(() => {
+    try {
+      Voice.onSpeechStart = onSpeechStart;
+      Voice.onSpeechResults = onSpeechResults;
+      Voice.onSpeechPartialResults = onSpeechPartialResults;
+      Voice.onSpeechEnd = onSpeechEnd;
+      Voice.onSpeechError = onSpeechError;
+      
+      // Assign empty functions instead of null to satisfy TypeScript
+      Voice.onSpeechVolumeChanged = onSpeechVolumeChanged;
+      Voice.onSpeechRecognized = onSpeechRecognized;
+    } catch (error) {
+      console.log('Setup error:', error);
+    }
+  }, [onSpeechStart, onSpeechResults, onSpeechPartialResults, onSpeechEnd, onSpeechError, onSpeechVolumeChanged, onSpeechRecognized]);
 
-            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                console.warn('Microphone permission denied');
-            }
-        }
-    };
-
-    const stopListening = async () => {
-        console.log('🛑 STOPPING VOICE INPUT');
+  // Enhanced permissions check
+  const checkPermissions = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      try {
+        const permissionStatus = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+        );
         
-        if (autoStopTimeoutRef.current) {
-            clearTimeout(autoStopTimeoutRef.current);
-            autoStopTimeoutRef.current = null;
-        }
-        
-        try {
-            await Voice.stop();
-        } catch (error) {
-            console.warn('Voice stop error:', error);
-        }
-        
-        setIsListening(false);
-        console.log('✅ isListening set to FALSE');
-    };
-
-    const startListening = async () => {
-        if (Platform.OS === 'android') {
-            const permission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-            if (!permission) {
-                const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-                if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                    Alert.alert(
-                        'Microphone Permission Required',
-                        'Please enable microphone permission in settings to use voice input.',
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                        ]
-                    );
-                    return;
-                }
-            }
+        if (permissionStatus) {
+          return true;
         }
 
-        try {
-            console.log('🚀 STARTING VOICE INPUT');
-            
-            await Voice.start('en-US');
-            setIsListening(true);
-            lastResultTimeRef.current = Date.now();
-            
-            console.log('✅ isListening set to TRUE');
-            
-            autoStopTimeoutRef.current = setTimeout(() => {
-                console.log('⏰ 5 seconds passed - AUTO STOPPING');
-                stopListening();
-            }, 10000); // 10 seconds total
-            
-        } catch (error) {
-            console.error('❌ Error starting voice recognition:', error);
-            setIsListening(false);
-        }
-    };
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title: 'Microphone Permission',
+            message: 'This app needs access to your microphone to use voice input.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.log('Permission error:', err);
+        return false;
+      }
+    }
+    return true;
+  }, []);
 
-    const handleVoiceToggle = () => {
-        console.log('🔄 TOGGLE - Current isListening:', isListening);
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening();
-        }
-    };
+  // Forward declaration to fix circular dependency
+  const stopListening = useCallback(async (): Promise<void> => {
+    console.log('🛑 Stopping voice input...');
+    
+    try {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      
+      await Voice.stop();
+      await Voice.cancel();
+      
+      setIsListening(false);
+      isRecordingRef.current = false;
+      
+      if (accumulatedTextRef.current) {
+        setInputText(accumulatedTextRef.current);
+        setVoiceInputText(accumulatedTextRef.current);
+      }
+      
+      console.log('✅ Voice recognition stopped');
+    } catch (error) {
+      console.log('❌ Error stopping voice:', error);
+      setIsListening(false);
+      isRecordingRef.current = false;
+    }
+  }, []);
 
-    const clearInput = () => {
-        setInputText('');
-    };
+  const startListening = useCallback(async (): Promise<void> => {
+    console.log('🎤 Starting voice input...');
+    
+    if (isRecordingRef.current) {
+      console.log('⚠️ Already recording');
+      return;
+    }
 
-    return {
-        isListening,
-        inputText,
-        setInputText,
-        startListening,
-        stopListening,
-        handleVoiceToggle,
-        clearInput,
-        shouldFocusPromptInput,
-        setShouldFocusPromptInput
-    };
+    const hasPermission = await checkPermissions();
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Microphone permission is required for voice input.');
+      return;
+    }
+
+    try {
+      await Voice.destroy();
+      setupVoiceListeners();
+      
+      isRecordingRef.current = true;
+      setIsListening(true);
+      
+      await Voice.start('en-US', {
+        EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+        EXTRA_CALLING_PACKAGE: 'com.toshibachatbot',
+        EXTRA_PARTIAL_RESULTS: true,
+        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+        EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+      });
+      
+      console.log('✅ Voice recognition started');
+    } catch (error) {
+      console.log('❌ Error starting voice:', error);
+      setIsListening(false);
+      isRecordingRef.current = false;
+      Alert.alert('Voice Error', 'Could not start voice recognition. Please check your microphone.');
+    }
+  }, [checkPermissions, setupVoiceListeners]);
+
+  const handleVoiceToggle = useCallback(async (): Promise<void> => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      await startListening();
+    }
+  }, [isListening, startListening, stopListening]);
+
+  const clearVoiceInput = useCallback((): void => {
+    setVoiceInputText('');
+    accumulatedTextRef.current = '';
+  }, []);
+
+  return {
+    inputText,
+    setInputText,
+    isListening,
+    voiceInputText,
+    setVoiceInputText,
+    shouldFocusPromptInput,
+    setShouldFocusPromptInput,
+    startListening,
+    stopListening,
+    handleVoiceToggle,
+    clearVoiceInput,
+  };
 };

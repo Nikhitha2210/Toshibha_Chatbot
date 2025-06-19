@@ -1,22 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Required permissions for your app -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    
-    <!-- Optional: For better network debugging -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" tools:ignore="ProtectedPermissions" />
 
-    <!-- Speech recognition service query -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
-        <!-- Optional: For web browsing if needed -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
@@ -44,7 +39,6 @@
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         tools:targetApi="31">
 
-        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
@@ -60,7 +54,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             
-            <!-- Optional: Deep linking support if needed -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -69,12 +62,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Speech Recognition Service (if using custom implementation) -->
         <service
             android:name="com.facebook.react.modules.systeminfo.AndroidInfoHelpers"
             android:exported="false" />
 
-        <!-- File provider for sharing files (optional but recommended) -->
+        <service 
+            android:name="com.wenkesj.voice.VoiceModule" 
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -85,7 +80,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Notification metadata (for push notifications if needed) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
@@ -94,7 +88,6 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/primary_color" />
 
-        <!-- React Native metadata -->
         <meta-data
             android:name="expo.modules.updates.EXPO_UPDATE_URL"
             android:value="" />

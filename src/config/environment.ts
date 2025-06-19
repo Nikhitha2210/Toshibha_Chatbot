@@ -1,6 +1,4 @@
-// src/config/environment.ts
 
-// Production Configuration from your backend team
 export const API_CONFIG = {
   // Chat API Configuration - Backend (HTTPS)
   CHAT_API_BASE_URL: 'https://tgcsbe.iopex.ai',

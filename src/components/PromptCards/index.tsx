@@ -1,5 +1,4 @@
 import React from 'react'
-
 import { Text, TouchableOpacity, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,43 +21,37 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const PromptCards = () => {
     const { setInputText } = usePrompt();
-    const { sendMessage, clearMessages } = useChat();
+    const { sendMessage, clearMessages, isLoading } = useChat();
     const navigation = useNavigation<NavigationProp>();
 
     const { theme, toggleTheme, colors } = useThemeContext();
-
     const styles = getStyles(theme);
 
     const handleCardPress = async (cardText: string) => {
+        if (isLoading) {
+            console.log('⏭️ Skipping card press - already loading');
+            return;
+        }
+
         try {
-            // Set the input text
+            console.log('🎯 PromptCard clicked:', cardText);
+            
+            // ONLY set the input text - don't navigate or send message
             setInputText(cardText);
-
-            // Clear previous messages
-            clearMessages();
-
-            // Small delay to ensure navigation completes
-            setTimeout(async () => {
-                try {
-                    // Send the message (this will show question immediately and then AI response)
-                    await sendMessage(cardText);
-                } catch (error) {
-                    console.error('Error sending preset message:', error);
-                }
-            }, 100);
+            console.log('✅ PromptCard text set to input:', cardText);
 
         } catch (error) {
-            console.error('Error handling card press:', error);
+            console.error('❌ Error handling card press:', error);
         }
     };
 
     return (
         <View style={styles.promptCardsContainer}>
-
             <TouchableOpacity
                 style={styles.card}
                 onPress={() => handleCardPress('Part Number LookUp')}
                 activeOpacity={0.7}
+                disabled={isLoading}
             >
                 <View>
                     <IconAssets.Solid style={styles.cardIcon} />
@@ -71,6 +64,7 @@ const PromptCards = () => {
                 style={styles.card}
                 onPress={() => handleCardPress('Troubleshooting')}
                 activeOpacity={0.7}
+                disabled={isLoading}
             >
                 <View>
                     <IconAssets.Speedometer style={styles.cardIcon} />
@@ -83,6 +77,7 @@ const PromptCards = () => {
                 style={styles.card}
                 onPress={() => handleCardPress('Technical Support')}
                 activeOpacity={0.7}
+                disabled={isLoading}
             >
                 <View>
                     <IconAssets.Speedometer style={styles.cardIcon} />
@@ -91,7 +86,6 @@ const PromptCards = () => {
                 <IconAssets.Arrow style={styles.cardArrow} />
             </TouchableOpacity>
         </View>
-
     )
 }
 

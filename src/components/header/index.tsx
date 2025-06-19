@@ -1,5 +1,4 @@
 import React from 'react';
-
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { getThemedIcon } from '../../assets/icons/IconAssets';
@@ -10,7 +9,6 @@ type HeaderTypes = {
 }
 
 const Header = (props: HeaderTypes) => {
-
     const { theme } = useThemeContext();
 
     const ThemedLogoIcon = getThemedIcon('Logo', theme);
@@ -18,10 +16,18 @@ const Header = (props: HeaderTypes) => {
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity onPress={props?.onMenuPress}>
+            <TouchableOpacity 
+                onPress={props?.onMenuPress}
+                style={styles.menuButton}
+                activeOpacity={0.7}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
                 {ThemedMenuIcon && <ThemedMenuIcon style={styles.icon} />}
             </TouchableOpacity>
-            {ThemedLogoIcon && <ThemedLogoIcon style={styles.logo} />}
+            
+            <View style={styles.logoContainer}>
+                {ThemedLogoIcon && <ThemedLogoIcon style={styles.logo} />}
+            </View>
         </View>
     );
 };
@@ -34,10 +40,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 25,
     },
+    menuButton: {
+        padding: 8,
+        borderRadius: 8,
+        minWidth: 44,
+        minHeight: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     icon: {
         height: 25,
         width: 25,
         resizeMode: 'contain',
+    },
+    logoContainer: {
+        flex: 1,
+        alignItems: 'flex-end',
     },
     logo: {
         height: 40,

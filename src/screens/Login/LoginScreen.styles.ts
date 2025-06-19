@@ -1,35 +1,41 @@
 import { StyleSheet } from 'react-native';
-
 import Colors from '../../theme/colors';
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: Colors.dark.background2,
     },
     scrollViewContent: {
         flexGrow: 1,
         justifyContent: 'space-between',
         paddingHorizontal: 24,
+        paddingTop: 20,
         backgroundColor: Colors.dark.background2,
     },
     wrapper: {
         flex: 1,
         justifyContent: 'center',
+        paddingTop: 60, // Add top padding to avoid logo overlap
     },
     logoWrapper: {
         position: 'absolute',
-        top: 50,
-        right: 10,
+        top: 50, // Moved down to avoid status bar
+        right: 20, // More margin from edge
+        zIndex: 1, // Ensure it's above content but not overlapping
     },
     logo: {
-        height: 50,
-        width: 120,
+        height: 40, // Slightly smaller
+        width: 96, // Proportionally smaller
     },
     mainWrapper: {
         justifyContent: 'center',
+        paddingHorizontal: 0,
+        marginTop: 20, // Add margin to push content below logo
     },
     centreText: {
-        marginBottom: 60
+        marginBottom: 60,
+        paddingTop: 20, // Extra padding to ensure no overlap
     },
     title: {
         color: Colors.dark.text,
@@ -47,7 +53,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: Colors.dark.background,
         paddingHorizontal: 12,
-        paddingVertical: 5,
+        paddingVertical: 8,
         borderRadius: 10,
         marginBottom: 16,
         borderWidth: 1,
@@ -59,14 +65,15 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         color: Colors.dark.text,
+        paddingVertical: 12,
+        fontSize: 16,
     },
     signInButton: {
         backgroundColor: Colors.dark.primary,
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderRadius: 10,
         alignItems: 'center',
         marginTop: 10,
-        opacity: 1,
     },
     signInButtonText: {
         color: Colors.dark.text,
@@ -92,7 +99,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#000',
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderRadius: 10,
     },
     googleIcon: {
@@ -105,8 +112,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     footer: {
-        paddingVertical: 16,
+        paddingVertical: 20,
         alignItems: 'center',
+        backgroundColor: Colors.dark.background2,
     },
     footerText: {
         color: Colors.dark.text,

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-import { View, Animated, Dimensions, Text, ScrollView } from 'react-native';
+import { View, Animated, Dimensions, Text, SafeAreaView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { getStyles } from './HomeScreen.Styles';
@@ -46,25 +45,17 @@ const HomeScreen = () => {
         .runOnJS(true);
 
     return (
-        <View style={styles.container}>
-            <View style={styles.headerContainer}>
-                <Header onMenuPress={openMenu} />
-                <Text style={styles.headerText}>What can I help with?</Text>
-                <Text style={styles.headerSubText}>
-                    Use one of most common prompts{'\n'}below to begin
-                </Text>
-            </View>
+        <SafeAreaView style={{ flex: 1 }}>
+            <View style={styles.container}>
+                <View style={styles.headerContainer}>
+                    <Header onMenuPress={openMenu} />
+                    <Text style={styles.headerText}>What can I help with?</Text>
+                    <Text style={styles.headerSubText}>
+                        Use one of most common prompts{'\n'}below to begin
+                    </Text>
+                </View>
 
-            <View style={styles.contentContainer}>
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={true}
-                    scrollEnabled={true}
-                    bounces={true}
-                    alwaysBounceVertical={true}
-                    keyboardShouldPersistTaps="handled"
-                >
+                <View style={styles.contentContainer}>
                     <View style={styles.promptCardsContainer}>
                         <PromptCards />
                     </View>
@@ -72,25 +63,23 @@ const HomeScreen = () => {
                     <View style={styles.recentQueriesContainer}>
                         <RecentQueries />
                     </View>
-                </ScrollView>
-            </View>
-
-            <View style={styles.inputWrapper}>
-                <View style={styles.inputContainer}>
-                    <PromptInput clearOnSend={true} />
                 </View>
+
+                <View style={styles.inputWrapper}>
+                    <PromptInput clearOnSend />
+                </View>
+
+                <GestureDetector gesture={swipeGesture}>
+                    <View style={styles.leftEdgeGestureArea} />
+                </GestureDetector>
+
+                <Sidebar
+                    visible={isModalVisible}
+                    slideAnim={slideAnim}
+                    onClose={closeMenu}
+                />
             </View>
-
-            <GestureDetector gesture={swipeGesture}>
-                <View style={styles.leftEdgeGestureArea} />
-            </GestureDetector>
-
-            <Sidebar
-                visible={isModalVisible}
-                slideAnim={slideAnim}
-                onClose={closeMenu}
-            />
-        </View>
+        </SafeAreaView>
     );
 };
 

@@ -9,11 +9,13 @@ export const getStyles = (theme: 'light' | 'dark') => {
             flex: 1,
             backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background,
         },
+        
         headerContainer: {
             paddingHorizontal: 20,
             paddingTop: 20,
             backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background,
         },
+        
         headerText: {
             fontSize: 18,
             fontWeight: 'bold',
@@ -22,32 +24,35 @@ export const getStyles = (theme: 'light' | 'dark') => {
             marginTop: 30,
             textAlign: 'center'
         },
+        
         headerSubText: {
             fontSize: 14,
             color: Colors.dark.subText,
             textAlign: 'center',
             marginBottom: 30
         },
+        
+        // ✅ FIXED CONTENT CONTAINER - proper spacing, no ScrollView conflicts
         contentContainer: {
             flex: 1,
-            marginBottom: 120, // Space for fixed input
+            paddingHorizontal: 20,
+            marginBottom: 120, // Space for fixed input at bottom
         },
-        scrollView: {
-            flex: 1,
-        },
-        scrollContent: {
-            padding: 20,
-            paddingBottom: 40,
-            minHeight: SCREEN_HEIGHT * 0.6, // Ensure minimum scrollable height
-        },
+        
+        // ✅ PROMPT CARDS - clickable, no zIndex conflicts
         promptCardsContainer: {
             alignItems: 'center',
-            marginBottom: 30,
+            marginBottom: 20,
         },
+        
+        // ✅ RECENT QUERIES - clickable, proper container  
         recentQueriesContainer: {
             flex: 1,
-            minHeight: 300,
+            minHeight: 250,
+            maxHeight: SCREEN_HEIGHT * 0.5,
         },
+        
+        // ✅ FIXED INPUT WRAPPER - no touch blocking
         inputWrapper: {
             position: 'absolute',
             bottom: 0,
@@ -58,22 +63,21 @@ export const getStyles = (theme: 'light' | 'dark') => {
             borderTopStartRadius: 20,
             paddingVertical: 20,
             paddingHorizontal: 20,
+            paddingBottom: 25,
             elevation: 10,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
             shadowRadius: 3.84,
         },
-        inputContainer: {
-            // Remove extra container styling since inputWrapper handles it
-        },
+        
         leftEdgeGestureArea: {
             position: 'absolute',
             left: 0,
-            top: 100, // Start below the header to avoid button interference
+            top: 100,
             width: 30,
-            height: '80%', // Don't cover full height
-            zIndex: 1, // Lower z-index to not block buttons
+            height: '80%',
+            zIndex: 1,
         }
     })
 }

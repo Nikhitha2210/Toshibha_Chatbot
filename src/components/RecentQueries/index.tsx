@@ -15,14 +15,15 @@ const RecentQueries = () => {
 
     const handleQueryPress = (queryText: string) => {
         try {
+            console.log('🎯 RecentQuery clicked:', queryText);
             setInputText(queryText);
-            if (error) clearError(); // Clear any existing errors
+            if (error) clearError();
+            console.log('✅ Input text set to:', queryText);
         } catch (err) {
-            console.error('Error setting input text:', err);
+            console.error('❌ Error setting input text:', err);
         }
     }
 
-    // Format time difference
     const formatTimeAgo = (timestamp: string): string => {
         try {
             const now = new Date();
@@ -73,10 +74,13 @@ const RecentQueries = () => {
 
             {hasQueries ? (
                 <ScrollView
-                    style={{ flex: 1, maxHeight: 250 }}
+                    style={{ flex: 1 }}
                     contentContainerStyle={{ paddingBottom: 10 }}
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
+                    scrollEnabled={true}
+                    bounces={true}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {recentQueries.map((query) => (
                         <TouchableOpacity
