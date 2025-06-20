@@ -7,13 +7,13 @@ import { PromptProvider } from './src/context/PromptContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { ChatProvider } from './src/context/ChatContext';
 
-import { checkMicrophonePermission } from './src/utils/checkMicrophonePermissions'
+import { checkMicrophonePermission } from './src/utils/checkMicrophonePermissions';
 import Navigation from './src/navigation';
+import ErrorBoundary from './src/ErrorBoundary/ErrorBoundary'; // ✅ Import the separate ErrorBoundary
 
 const App = () => {
-
   useEffect(() => {
-    const handleAppStateChange = (nextAppState) => {
+    const handleAppStateChange = (nextAppState: any) => {
       if (nextAppState === 'active') {
         checkMicrophonePermission();
       }
@@ -27,17 +27,19 @@ const App = () => {
   }, []);
 
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <ChatProvider>
-          <PromptProvider>
-            <GestureHandlerRootView style={styles.rootView}>
-              <Navigation />
-            </GestureHandlerRootView>
-          </PromptProvider>
-        </ChatProvider>
-      </ThemeProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ThemeProvider>
+          <ChatProvider>
+            <PromptProvider>
+              <GestureHandlerRootView style={styles.rootView}>
+                <Navigation />
+              </GestureHandlerRootView>
+            </PromptProvider>
+          </ChatProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 

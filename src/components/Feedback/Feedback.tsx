@@ -28,10 +28,16 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     const [isVoiceActive, setIsVoiceActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { startListening, stopListening, isListening, setInputText: setVoiceInputText, inputText: voiceInputText, } = useVoiceInput();
+    const { 
+        startListening, 
+        stopListening, 
+        isListening, 
+        setInputText: setVoiceInputText, 
+        inputText: voiceInputText,
+        clearText
+    } = useVoiceInput();
+    
     const { submitFeedback } = useChat();
-
-    const clearVoiceInput = () => setVoiceInputText('');
 
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
@@ -58,7 +64,8 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
             await stopListening();
             setIsVoiceActive(false);
         } else {
-            clearVoiceInput();
+            // Set the current feedback text to voice input before starting
+            setVoiceInputText(feedbackText);
             setIsVoiceActive(true);
             await startListening();
         }
@@ -96,10 +103,10 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     };
 
     const handleClose = () => {
-        if (isVoiceActive) {
-            clearVoiceInput();
-            setIsVoiceActive(false);
+        if (isVoiceActive && isListening) {
+            stopListening();
         }
+        setIsVoiceActive(false);
         setFeedbackText('');
         setHarmful(false);
         setUntrue(false);
@@ -113,7 +120,31 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                 <View style={styles.feedbackModal}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={styles.feedbackTitle}>Provide feedback</Text>
-                        <TouchableOpacity onPress={handleVoiceToggle} style={{ padding: 5 }} disabled={isSubmitting}>
+                        <TouchableOpacity 
+                            onPressIn={async () => {
+                                if (!isListening) {
+                                    setVoiceInputText(feedbackText);
+                                    setIsVoiceActive(true);
+                                    await startListening();
+                                }
+                            }}
+                            onPressOut={async () => {
+                                if (isListening) {
+                                    await stopListening();
+                                    setIsVoiceActive(false);
+                                }
+                            }}
+                            style={{ 
+                                padding: 8,
+                                borderRadius: 20,
+                                backgroundColor: isListening ? '#FF681F' : 'transparent',
+                                minWidth: 40,
+                                minHeight: 40,
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }} 
+                            disabled={isSubmitting}
+                        >
                             {isListening ? (
                                 <ListeningDots />
                             ) : (
@@ -135,9 +166,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         editable={!isListening && !isSubmitting}
                     />
 
-                    {isVoiceActive && (
+                    {isListening && (
                         <Text style={{ color: '#FF681F', fontSize: 12, marginBottom: 10 }}>
-                            {isListening ? 'Listening...' : 'Voice input active - tap mic to record again'}
+                            🎤 Hold to talk, release when done
                         </Text>
                     )}
 

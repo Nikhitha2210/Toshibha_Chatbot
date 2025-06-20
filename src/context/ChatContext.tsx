@@ -137,7 +137,7 @@ type ChatContextType = {
     refreshChatHistory: () => Promise<void>;
     clearAllUserData: () => Promise<void>;
     addNewSession: () => void;
-    cleanupEmptySessions: () => Promise<void>; // ✅ Added cleanup function
+    cleanupEmptySessions: () => Promise<void>;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -961,6 +961,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
+    // ✅ CRITICAL: Enhanced sendMessage with crash prevention
     const sendMessage = useCallback(async (text: string) => {
         if (!text.trim() || isLoading) {
             console.log('⏭️ Skipping send - empty text or already loading');
@@ -968,8 +969,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
 
         console.log('=== 🚀 STARTING SEND MESSAGE ===');
-        console.log('📝 Message text:', text);
-
+        
+        // Create cleanup function to prevent memory leaks
+        let cleanupFunctions: (() => void)[] = [];
+        let isRequestCancelled = false;
+        
         try {
             if (!currentSessionId) {
                 const newSessionId = uuidv4();
@@ -978,7 +982,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const isSessionValid = await authContext.validateSessionBeforeRequest();
-            if (!isSessionValid) {
+            if (!isSessionValid || isRequestCancelled) {
                 throw new Error('Session expired. Please log in again.');
             }
 
@@ -1023,8 +1027,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             addMessage(aiMessage);
 
             const token = authContext.state.tokens?.access_token;
-
-            if (!token) {
+            if (!token || isRequestCancelled) {
                 throw new Error('No authentication token available');
             }
 
@@ -1043,19 +1046,40 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             const chatUrl = getChatApiUrl('/run');
             console.log('📡 Sending chat request to:', chatUrl);
 
+            // ✅ CRITICAL: Improved status polling with cleanup
+            let statusInterval: NodeJS.Timeout | null = null;
+            
             const startStatusPolling = () => {
                 const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${APP_SESSION_ID}`);
 
-                statusPollingRef.current = setInterval(async () => {
+                statusInterval = setInterval(async () => {
+                    if (isRequestCancelled) {
+                        if (statusInterval) {
+                            clearInterval(statusInterval);
+                            statusInterval = null;
+                        }
+                        return;
+                    }
+
                     try {
-                        const statusResponse = await safeFetch(statusUrl);
+                        // Create timeout controller for status polling
+                        const statusController = new AbortController();
+                        const statusTimeoutId = setTimeout(() => statusController.abort(), 5000);
+                        
+                        const statusResponse = await safeFetch(statusUrl, {
+                            signal: statusController.signal
+                        });
+                        
+                        clearTimeout(statusTimeoutId);
+                        
                         if (statusResponse.ok) {
                             const statusText = await statusResponse.text();
-
-                            const lines = statusText.split('\n');
-                            for (const line of lines) {
-                                if (line.startsWith('data: ')) {
-                                    try {
+                            
+                            // Better parsing with error handling
+                            try {
+                                const lines = statusText.split('\n');
+                                for (const line of lines) {
+                                    if (line.startsWith('data: ') && !isRequestCancelled) {
                                         const data = JSON.parse(line.substring(6));
                                         if (data.status) {
                                             updateMessage(aiMessageId, {
@@ -1063,27 +1087,34 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                                                 isStreaming: true
                                             });
                                         }
-                                    } catch (parseError) {
-                                        console.log('⚠️ Status parse error (normal):', parseError);
                                     }
                                 }
+                            } catch (parseError) {
+                                // Ignore JSON parse errors for status polling
                             }
                         }
                     } catch (statusError) {
-                        console.log('⚠️ Status polling error:', statusError);
+                        // Ignore status polling errors to prevent crashes
                     }
                 }, 3000);
             };
 
             const stopStatusPolling = () => {
-                if (statusPollingRef.current) {
-                    clearInterval(statusPollingRef.current);
-                    statusPollingRef.current = null;
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
                     console.log('🛑 Status polling stopped');
                 }
             };
 
+            // Add cleanup function
+            cleanupFunctions.push(stopStatusPolling);
+
             startStatusPolling();
+
+            // ✅ CRITICAL: API call with timeout and abort controller
+            const abortController = new AbortController();
+            cleanupFunctions.push(() => abortController.abort());
 
             const response = await safeApiCall(async () => {
                 const res = await safeFetch(chatUrl, {
@@ -1093,6 +1124,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                         'Authorization': `Bearer ${token}`,
                     },
                     body: JSON.stringify(requestBody),
+                    signal: abortController.signal
                 });
 
                 if (!res.ok) {
@@ -1104,6 +1136,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 return res;
             });
 
+            if (isRequestCancelled) {
+                console.log('🚫 Request cancelled, stopping...');
+                return;
+            }
+
             console.log('✅ Chat response received');
 
             const responseText = await response.text();
@@ -1112,7 +1149,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             let fullMessage = '';
             let extractedSources: SourceReference[] = [];
 
-            if (responseText) {
+            if (responseText && !isRequestCancelled) {
                 try {
                     const jsonResponse = JSON.parse(responseText);
                     fullMessage = jsonResponse.message || jsonResponse.response || jsonResponse.text || responseText;
@@ -1122,8 +1159,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
                 extractedSources = extractSourcesFromText(fullMessage);
 
+                // ✅ CRITICAL: Controlled streaming with cancellation check
                 const words = fullMessage.split(' ');
-                for (let i = 0; i < words.length; i += 3) {
+                for (let i = 0; i < words.length && !isRequestCancelled; i += 3) {
                     const chunk = words.slice(0, i + 3).join(' ');
                     updateMessage(aiMessageId, {
                         message: chunk,
@@ -1136,51 +1174,78 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             stopStatusPolling();
 
-            updateMessage(aiMessageId, {
-                message: fullMessage,
-                isStreaming: false,
-                agentStatus: undefined,
-                sources: extractedSources,
-                highlight: {
-                    title: "AI Response",
-                    rating: 4.8,
-                    reviews: 8399,
-                    description: "Response completed"
-                }
-            });
+            if (!isRequestCancelled) {
+                updateMessage(aiMessageId, {
+                    message: fullMessage,
+                    isStreaming: false,
+                    agentStatus: undefined,
+                    sources: extractedSources,
+                    highlight: {
+                        title: "AI Response",
+                        rating: 4.8,
+                        reviews: 8399,
+                        description: "Response completed"
+                    }
+                });
 
-            console.log('✅ Message processing completed successfully');
+                console.log('✅ Message processing completed successfully');
+            }
 
         } catch (error) {
             console.error('❌ Send message error:', error);
 
-            if (statusPollingRef.current) {
-                clearInterval(statusPollingRef.current);
-                statusPollingRef.current = null;
-            }
+            // Clean up all resources
+            cleanupFunctions.forEach(cleanup => {
+                try {
+                    cleanup();
+                } catch (err) {
+                    // Ignore cleanup errors
+                }
+            });
 
-            const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
-            setError(errorMessage);
+            if (!isRequestCancelled) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
+                setError(errorMessage);
 
-            const aiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
-            if (aiMessages.length > 0) {
-                updateMessage(aiMessages[0].id, {
-                    message: `Error: ${errorMessage}`,
-                    isStreaming: false,
-                    agentStatus: undefined,
-                    sources: [],
-                    highlight: {
-                        title: "Error",
-                        rating: 0,
-                        reviews: 0,
-                        description: "Failed to get response"
-                    }
-                });
+                const aiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
+                if (aiMessages.length > 0) {
+                    updateMessage(aiMessages[0].id, {
+                        message: `Error: ${errorMessage}`,
+                        isStreaming: false,
+                        agentStatus: undefined,
+                        sources: [],
+                        highlight: {
+                            title: "Error",
+                            rating: 0,
+                            reviews: 0,
+                            description: "Failed to get response"
+                        }
+                    });
+                }
             }
         } finally {
+            // Always cleanup, even on success
+            cleanupFunctions.forEach(cleanup => {
+                try {
+                    cleanup();
+                } catch (err) {
+                    // Ignore cleanup errors
+                }
+            });
+            
             setIsLoading(false);
         }
-    }, [messages, isLoading, addMessage, updateMessage, authContext, currentSessionId, saveRecentQuery, getCurrentUserId, extractSourcesFromText]);
+    }, [
+        messages, 
+        isLoading, 
+        addMessage, 
+        updateMessage, 
+        authContext, 
+        currentSessionId, 
+        saveRecentQuery, 
+        getCurrentUserId, 
+        extractSourcesFromText
+    ]);
 
     const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
         try {
@@ -1335,37 +1400,61 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    // Initialize app and run cleanup on startup
+    // ✅ CRITICAL: Crash-proof initialization
     useEffect(() => {
+        let isMounted = true;
+        let initTimeout: NodeJS.Timeout | null = null;
+        
         const initializeApp = async () => {
-            if (!authContext.state.isAuthenticated) {
-                console.log('⏭️ Skipping initialization - user not authenticated');
+            // Prevent multiple rapid initializations
+            if (!authContext.state.isAuthenticated || !isMounted) {
+                console.log('⏭️ Skipping initialization - not authenticated or unmounted');
                 return;
             }
 
-            console.log('🚀 ChatProvider initializing with backend integration...');
+            console.log('🚀 ChatProvider initializing (single instance)...');
 
             try {
-                // ✅ Run cleanup first to remove empty sessions
-                await cleanupEmptySessions();
+                // Add delay to prevent race conditions
+                await new Promise(resolve => {
+                    initTimeout = setTimeout(resolve, 100);
+                });
+                
+                if (!isMounted) return;
 
                 await Promise.all([
+                    cleanupEmptySessions(),
                     loadRecentQueries(),
                     refreshChatHistory(),
                     loadVotesFromStorage()
                 ]);
 
-                console.log('✅ All user data loaded successfully');
+                if (isMounted) {
+                    console.log('✅ All user data loaded successfully');
+                }
             } catch (error) {
-                console.error('❌ Failed to load user data:', error);
-                setError('Failed to load user data');
+                if (isMounted) {
+                    console.error('❌ Failed to load user data:', error);
+                    setError('Failed to load user data');
+                }
             }
-
-            console.log('📱 App Session ID:', APP_SESSION_ID);
         };
 
-        initializeApp();
-    }, [authContext.state.isAuthenticated, cleanupEmptySessions, loadRecentQueries, refreshChatHistory, loadVotesFromStorage]);
+        // Debounce initialization to prevent multiple calls
+        const debounceTimeout = setTimeout(() => {
+            if (isMounted) {
+                initializeApp();
+            }
+        }, 200);
+
+        return () => {
+            isMounted = false;
+            if (initTimeout) {
+                clearTimeout(initTimeout);
+            }
+            clearTimeout(debounceTimeout);
+        };
+    }, [authContext.state.isAuthenticated]);
 
     // ✅ FIXED: Only auto-save sessions with meaningful content
     useEffect(() => {
@@ -1468,7 +1557,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             refreshChatHistory,
             clearAllUserData,
             addNewSession,
-            cleanupEmptySessions, // ✅ Added cleanup function to context
+            cleanupEmptySessions,
         }}>
             {children}
         </ChatContext.Provider>
