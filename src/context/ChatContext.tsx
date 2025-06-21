@@ -12,7 +12,7 @@ import {
 } from '../config/environment';
 
 const uuidv4 = () => uuid.v4() as string;
-const APP_SESSION_ID = 'session-' + uuidv4();
+const APP_SESSION_ID = uuidv4(); // Pure UUID format
 
 export interface ChatMessage {
     id: string;
@@ -54,6 +54,8 @@ export interface SourceReference {
     pages: string;
     awsLink: string;
     url?: string;
+    fullMatchText?: string; // Add this line
+
 }
 
 export interface VoteData {
@@ -113,6 +115,8 @@ interface WebAppChatMessageObject {
     media?: any[];
     isStreaming?: boolean;
     agentStatus?: string;
+    sources?: SourceReference[]; // ← Add this line
+
 }
 
 type ChatContextType = {
@@ -182,7 +186,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
     const getCurrentUserId = useCallback(() => {
         const userData = authContext.state.user;
-        return String((userData as any)?.id || (userData as any)?.user_id || "7");
+    return userData?.email || String(userData?.id || "unknown_user");
     }, [authContext]);
 
     // ✅ NEW: Check if session has meaningful content
@@ -438,6 +442,70 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [hasSessionContent]);
 
+
+    const fetchBackendSessions = useCallback(async (): Promise<ChatSession[]> => {
+    try {
+        console.log('🌐 Fetching sessions from backend...');
+        
+        const token = authContext.state.tokens?.access_token;
+        const userId = getCurrentUserId(); // This will now be email
+
+        if (!token) {
+            console.log('❌ No token available for session fetch');
+            return [];
+        }
+
+        // Use the pastSessions endpoint that works with email
+        const response = await safeFetch(`${API_CONFIG.CHAT_API_BASE_URL}/pastSessions?uid=${encodeURIComponent(userId)}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            console.log(`❌ Session fetch failed: ${response.status}`);
+            return [];
+        }
+
+        const backendSessions: WebAppSessionObject[] = await response.json(); // ← Add type
+        console.log(`✅ Fetched ${backendSessions.length} sessions from backend for user: ${userId}`);
+
+        // Convert web app format to Android format
+        const convertedSessions: ChatSession[] = backendSessions.map((session: WebAppSessionObject) => ({ // ← Add types
+            id: session.id,
+            title: session.label || `Session ${new Date(session.creationDate).toLocaleDateString()}`,
+            timestamp: session.creationDate,
+            creationDate: session.creationDate,
+            messages: session.messages.map((msg: WebAppChatMessageObject) => ({ // ← Add type
+                id: msg.id,
+                time: new Date(msg.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                message: msg.text,
+                isUser: !msg.isBot,
+                sources: (msg as any).sources || [], // ← Cast to any for sources
+                hasVoted: msg.vote !== undefined && msg.vote !== null && msg.vote !== 0,
+                voteType: msg.vote === 1 ? 'upvote' as const : msg.vote === -1 ? 'downvote' as const : undefined,
+                feedback: msg.feedback,
+                highlight: {
+                    title: msg.isBot ? "AI Response" : "Your Query",
+                    rating: msg.isBot ? 4.8 : 0,
+                    reviews: msg.isBot ? 8399 : 0,
+                    description: msg.text || ''
+                }
+            })),
+            userId: userId,
+            label: session.label
+        }));
+
+        return convertedSessions.filter(session => hasSessionContent(session.messages));
+    } catch (error) {
+        console.error('❌ Failed to fetch backend sessions:', error);
+        return [];
+    }
+}, [authContext, getCurrentUserId, hasSessionContent]);
+
+
     const saveSessionToBackend = useCallback(async (session: ChatSession) => {
         try {
             console.log('💾 Saving session to backend database (Web App Compatible)...');
@@ -451,23 +519,24 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const webAppSession: WebAppSessionObject = {
-                id: session.id,
-                label: session.title,
-                creationDate: session.creationDate || session.timestamp,
-                messages: session.messages.map(msg => ({
-                    id: msg.id,
-                    userName: userId,
-                    isBot: !msg.isUser,
-                    date: new Date().toISOString(),
-                    text: msg.message,
-                    vote: msg.hasVoted ? (msg.voteType === 'upvote' ? 1 : (msg.voteType === 'downvote' ? -1 : 0)) : 0,
-                    feedback: msg.feedback || '',
-                    feedbackfiles: undefined,
-                    files: undefined,
-                    media: undefined,
-                    isStreaming: false
-                }))
-            };
+    id: session.id,
+    label: session.title,
+    creationDate: session.creationDate || session.timestamp,
+    messages: session.messages.map(msg => ({
+        id: msg.id,
+        userName: getCurrentUserId(), // ← This will now be email
+        isBot: !msg.isUser,
+        date: new Date().toISOString(),
+        text: msg.message,
+        vote: msg.hasVoted ? (msg.voteType === 'upvote' ? 1 : (msg.voteType === 'downvote' ? -1 : 0)) : 0,
+        feedback: msg.feedback || '',
+        feedbackfiles: undefined,
+        files: undefined,
+        media: undefined,
+        isStreaming: false,
+        sources: msg.sources || [] // ← Add sources
+    }))
+};
 
             console.log('📤 Web App Session Format:', JSON.stringify(webAppSession, null, 2));
 
@@ -686,38 +755,38 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }, [getCurrentUserId, hasSessionContent]);
 
     const refreshChatHistory = useCallback(async () => {
-        try {
-            console.log('🔄 Refreshing chat history from backend + local...');
-            setError(null);
+  try {
+    console.log('🔄 Refreshing chat history from backend + local...');
+    setError(null);
 
-            const [backendSessions, localSessions] = await Promise.all([
-                fetchChatHistoryFromBackend(),
-                loadUserSessions()
-            ]);
+    const [backendSessions, localSessions] = await Promise.all([
+      fetchBackendSessions(), // Use new function
+      loadUserSessions()
+    ]);
 
-            const allSessions = [...backendSessions, ...localSessions];
+    const allSessions = [...backendSessions, ...localSessions];
 
-            const uniqueSessions = allSessions.filter((session, index, self) =>
-                index === self.findIndex(s =>
-                    s.id === session.id ||
-                    (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
-                )
-            );
+    const uniqueSessions = allSessions.filter((session, index, self) =>
+      index === self.findIndex(s =>
+        s.id === session.id ||
+        (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
+      )
+    );
 
-            // ✅ FIXED: Filter out empty sessions
-            const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
-            validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
+    const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
+    validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
 
-            console.log(`📊 Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length}, Filtered: ${uniqueSessions.length - validSessions.length})`);
+    console.log(`📊 Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length})`);
 
-            setSessions(validSessions);
-            console.log('✅ Chat history refreshed successfully');
+    setSessions(validSessions);
+    console.log('✅ Chat history refreshed successfully');
 
-        } catch (error) {
-            console.error('❌ Failed to refresh chat history:', error);
-            setError('Failed to refresh chat history');
-        }
-    }, [fetchChatHistoryFromBackend, loadUserSessions, hasSessionContent]);
+  } catch (error) {
+    console.error('❌ Failed to refresh chat history:', error);
+    setError('Failed to refresh chat history');
+  }
+}, [fetchBackendSessions, loadUserSessions, hasSessionContent]);
+
 
     const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
         try {
@@ -908,58 +977,79 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         loadSession(sessionId);
     }, [loadSession]);
 
-    const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
-        try {
-            const sources: SourceReference[] = [];
+const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
+  try {
+    const sources: SourceReference[] = [];
 
-            const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/g;
-            let match;
+    // Pattern to find the full source reference with aws_id
+    const fullSourcePattern = /(.*?)\s+page\s+(\d+)\s+\[aws_id:\s+(.*?)\]/g;
+    const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/g;
+    
+    let match;
 
-            while ((match = awsIdPattern.exec(text)) !== null) {
-                const awsLink = match[1].trim();
-                const parts = awsLink.split('_page_');
-                if (parts.length >= 2) {
-                    const filename = parts[0].replace(/_/g, ' ');
-                    const pageNum = parts[1];
+    // First, try to find full source patterns
+    while ((match = fullSourcePattern.exec(text)) !== null) {
+      const filename = match[1].trim();
+      const pageNum = match[2];
+      const awsLink = match[3].trim();
 
-                    sources.push({
-                        filename: filename,
-                        pages: pageNum,
-                        awsLink: awsLink,
-                        url: getImageUrl(awsLink)
-                    });
-                }
-            }
+      sources.push({
+        filename: filename,
+        pages: pageNum,
+        awsLink: awsLink,
+        url: getImageUrl(awsLink), // Generate image URL
+        fullMatchText: match[0] // Store for replacement
+      });
+    }
 
-            const sourcePattern = /Source:\s*([^[]+)\[aws_id:\s*([^\]]+)\]/g;
-            while ((match = sourcePattern.exec(text)) !== null) {
-                const sourceText = match[1].trim();
-                const awsLink = match[2].trim();
+    // Then find any standalone aws_id tags not caught above
+    while ((match = awsIdPattern.exec(text)) !== null) {
+      const awsLink = match[1].trim();
+      
+      // Check if we already have this source
+      const existingSource = sources.find(s => s.awsLink === awsLink);
+      if (!existingSource) {
+        // Extract filename and page from awsLink
+        const parts = awsLink.split('_page_');
+        if (parts.length >= 2) {
+          const filename = parts[0].replace(/_/g, ' ');
+          const pageNum = parts[1];
 
-                const pageMatch = sourceText.match(/(.+?)\s+page\s+(\d+)/i);
-                if (pageMatch) {
-                    const filename = pageMatch[1].trim();
-                    const pageNum = pageMatch[2];
-
-                    const existingSource = sources.find(s => s.awsLink === awsLink);
-                    if (!existingSource) {
-                        sources.push({
-                            filename: filename,
-                            pages: pageNum,
-                            awsLink: awsLink,
-                            url: getImageUrl(awsLink)
-                        });
-                    }
-                }
-            }
-
-            console.log('📋 Extracted sources:', sources);
-            return sources;
-        } catch (error) {
-            console.error('Error extracting sources:', error);
-            return [];
+          sources.push({
+            filename: filename,
+            pages: pageNum,
+            awsLink: awsLink,
+            url: getImageUrl(awsLink),
+            fullMatchText: match[0]
+          });
         }
-    }, []);
+      }
+    }
+
+    console.log('📋 Extracted sources:', sources);
+    return sources;
+  } catch (error) {
+    console.error('Error extracting sources:', error);
+    return [];
+  }
+}, []);
+
+// Add helper function to clean message text
+const cleanMessageText = useCallback((text: string, sources: SourceReference[]): string => {
+  let cleanedText = text;
+  
+  // Remove source references from the text
+  sources.forEach(source => {
+    if (source.fullMatchText) {
+      cleanedText = cleanedText.replace(source.fullMatchText, '');
+    }
+  });
+  
+  // Clean up extra whitespace and line breaks
+  cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
+  
+  return cleanedText;
+}, []);
 
     // ✅ CRITICAL: Enhanced sendMessage with crash prevention
     const sendMessage = useCallback(async (text: string) => {
@@ -991,57 +1081,59 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
             await saveRecentQuery(text);
 
-            const userMessage: ChatMessage = {
-                id: uuidv4(),
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: text,
-                isUser: true,
-                sources: [],
-                highlight: {
-                    title: "Your Query",
-                    rating: 0,
-                    reviews: 0,
-                    description: text
-                }
-            };
+ // Generate consistent IDs at the top
+const userMessageId = uuidv4();
+const aiMessageId = uuidv4(); // This will be used as qid for backend
+const token = authContext.state.tokens?.access_token;
+if (!token) {
+    throw new Error('No authentication token available');
+}
+const userMessage: ChatMessage = {
+    id: userMessageId,  // ← Changed
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    message: text,
+    isUser: true,
+    sources: [],
+    highlight: {
+        title: "Your Query",
+        rating: 0,
+        reviews: 0,
+        description: text
+    }
+};
 
-            addMessage(userMessage);
+addMessage(userMessage);
 
-            const aiMessageId = uuidv4();
-            const aiMessage: ChatMessage = {
-                id: aiMessageId,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: '',
-                isUser: false,
-                isStreaming: true,
-                agentStatus: 'Processing your request...',
-                sources: [],
-                highlight: {
-                    title: "AI Response",
-                    rating: 4.8,
-                    reviews: 8399,
-                    description: "Processing your request..."
-                }
-            };
+const aiMessage: ChatMessage = {
+    id: aiMessageId,  // ← Same ID that will be used as qid
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    message: '',
+    isUser: false,
+    isStreaming: true,
+    agentStatus: 'Processing your request...',
+    sources: [],
+    highlight: {
+        title: "AI Response",
+        rating: 4.8,
+        reviews: 8399,
+        description: "Processing your request..."
+    }
+};
 
-            addMessage(aiMessage);
+addMessage(aiMessage);
 
-            const token = authContext.state.tokens?.access_token;
-            if (!token || isRequestCancelled) {
-                throw new Error('No authentication token available');
-            }
 
-            const requestBody = {
-                query: text,
-                qid: uuidv4(),
-                uid: getCurrentUserId(),
-                sid: APP_SESSION_ID,
-                messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
-                    content: msg.message,
-                    isBot: !msg.isUser
-                })),
-                collection: 'chatbot'
-            };
+const requestBody = {
+    query: text,
+    qid: aiMessageId,  // ← Changed: use same ID as AI message
+    uid: getCurrentUserId(),
+    sid: currentSessionId || APP_SESSION_ID,
+    messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
+        content: msg.message,
+        isBot: !msg.isUser
+    })),
+    collection: 'chatbot'
+};
 
             const chatUrl = getChatApiUrl('/run');
             console.log('📡 Sending chat request to:', chatUrl);
@@ -1050,8 +1142,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             let statusInterval: NodeJS.Timeout | null = null;
             
             const startStatusPolling = () => {
-                const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${APP_SESSION_ID}`);
-
+                const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${currentSessionId || APP_SESSION_ID}`);
                 statusInterval = setInterval(async () => {
                     if (isRequestCancelled) {
                         if (statusInterval) {
@@ -1157,8 +1248,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     fullMessage = responseText;
                 }
 
-                extractedSources = extractSourcesFromText(fullMessage);
-
                 // ✅ CRITICAL: Controlled streaming with cancellation check
                 const words = fullMessage.split(' ');
                 for (let i = 0; i < words.length && !isRequestCancelled; i += 3) {
@@ -1175,21 +1264,24 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             stopStatusPolling();
 
             if (!isRequestCancelled) {
-                updateMessage(aiMessageId, {
-                    message: fullMessage,
-                    isStreaming: false,
-                    agentStatus: undefined,
-                    sources: extractedSources,
-                    highlight: {
-                        title: "AI Response",
-                        rating: 4.8,
-                        reviews: 8399,
-                        description: "Response completed"
-                    }
-                });
+    const extractedSources = extractSourcesFromText(fullMessage);
+    const cleanedMessage = cleanMessageText(fullMessage, extractedSources);
+    
+    updateMessage(aiMessageId, {
+        message: cleanedMessage, // Use cleaned text without source tags
+        isStreaming: false,
+        agentStatus: undefined,
+        sources: extractedSources,
+        highlight: {
+            title: "AI Response",
+            rating: 4.8,
+            reviews: 8399,
+            description: "Response completed"
+        }
+    });
 
-                console.log('✅ Message processing completed successfully');
-            }
+    console.log('✅ Message processing completed successfully');
+}
 
         } catch (error) {
             console.error('❌ Send message error:', error);
@@ -1247,146 +1339,152 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         extractSourcesFromText
     ]);
 
-    const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
-        try {
-            console.log(`🗳️ Submitting ${voteType} for message`);
+const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
+  try {
+    console.log(`🗳️ Submitting ${voteType} for message`);
 
-            const isSessionValid = await authContext.validateSessionBeforeRequest();
-            if (!isSessionValid) {
-                throw new Error('Session expired. Please log in again.');
-            }
+    const isSessionValid = await authContext.validateSessionBeforeRequest();
+    if (!isSessionValid) {
+      throw new Error('Session expired. Please log in again.');
+    }
 
-            const token = authContext.state.tokens?.access_token;
+    const token = authContext.state.tokens?.access_token;
 
-            const aiMessage = messages.find(msg =>
-                !msg.isUser && msg.message === messageText
-            );
+    const aiMessage = messages.find(msg =>
+      !msg.isUser && msg.message === messageText
+    );
 
-            if (!aiMessage) {
-                throw new Error('Message not found for voting');
-            }
+    if (!aiMessage) {
+      throw new Error('Message not found for voting');
+    }
 
-            const voteUrl = 'https://tgcsbe.iopex.ai/vote';
+    const voteUrl = `${API_CONFIG.CHAT_API_BASE_URL}/vote`;
 
-            const votePayload = {
-                message_id: aiMessage.id,
-                user_id: getCurrentUserId(),
-                vote: voteType === 'upvote' ? 1 : -1,
-                session_id: currentSessionId || APP_SESSION_ID
-            };
+    const votePayload = {
+      message_id: aiMessage.id, // Use the message ID that matches backend qid
+      user_id: getCurrentUserId(),
+      vote: voteType === 'upvote' ? 1 : -1,
+      session_id: currentSessionId || APP_SESSION_ID // Use proper session ID
+    };
 
-            console.log('🗳️ Vote payload (exact web app format):', JSON.stringify(votePayload, null, 2));
+    console.log('🗳️ Vote payload:', JSON.stringify(votePayload, null, 2));
 
-            const response = await fetch(voteUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(votePayload),
-            });
+    const response = await safeFetch(voteUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(votePayload),
+    });
 
-            console.log('🗳️ Vote response status:', response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('❌ Vote failed:', response.status, '-', errorText);
+      throw new Error(`Vote submission failed: ${response.status} - ${errorText}`);
+    }
 
-            if (response.ok) {
-                const responseText = await response.text();
-                console.log('✅ Vote SUCCESS! Response:', responseText);
+    const responseText = await response.text();
+    console.log('✅ Vote SUCCESS! Response:', responseText);
 
-                setMessages(prev => prev.map(msg =>
-                    msg.message === messageText && !msg.isUser ? {
-                        ...msg,
-                        hasVoted: true,
-                        voteType: voteType
-                    } : msg
-                ));
+    setMessages(prev => prev.map(msg =>
+      msg.message === messageText && !msg.isUser ? {
+        ...msg,
+        hasVoted: true,
+        voteType: voteType
+      } : msg
+    ));
 
-                await saveVoteToStorage(aiMessage.id, messageText, voteType);
+    await saveVoteToStorage(aiMessage.id, messageText, voteType);
 
-                console.log(`✅ ${voteType} submitted successfully`);
-                clearError();
+    console.log(`✅ ${voteType} submitted successfully`);
+    clearError();
 
-            } else {
-                const errorText = await response.text();
-                console.log('❌ Vote failed:', response.status, '-', errorText);
-                throw new Error(`Vote submission failed: ${response.status} - ${errorText}`);
-            }
+  } catch (error) {
+    console.error('❌ Vote submission error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
+    setError(errorMessage);
+    throw new Error(errorMessage);
+  }
+}, [authContext, clearError, messages, currentSessionId, getCurrentUserId, saveVoteToStorage]);
 
-        } catch (error) {
-            console.error('❌ Vote submission error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Failed to submit vote';
-            setError(errorMessage);
-            throw new Error(errorMessage);
+const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
+    try {
+        console.log('📝 Submitting feedback for message');
+
+        const isSessionValid = await authContext.validateSessionBeforeRequest();
+        if (!isSessionValid) {
+            throw new Error('Session expired. Please log in again.');
         }
-    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId, saveVoteToStorage]);
 
-    const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
-        try {
-            console.log('📝 Submitting feedback for message');
+        const token = authContext.state.tokens?.access_token;
 
-            const isSessionValid = await authContext.validateSessionBeforeRequest();
-            if (!isSessionValid) {
-                throw new Error('Session expired. Please log in again.');
-            }
+        const aiMessage = messages.find(msg =>
+            !msg.isUser && msg.message === messageText
+        );
 
-            const token = authContext.state.tokens?.access_token;
-
-            const aiMessage = messages.find(msg =>
-                !msg.isUser && msg.message === messageText
-            );
-
-            if (!aiMessage) {
-                throw new Error('Message not found for feedback');
-            }
-
-            const feedbackUrl = 'https://tgcsbe.iopex.ai/feedback';
-
-            const requestBody = {
-                message_id: aiMessage.id,
-                user_id: getCurrentUserId(),
-                feedback: typeof feedback === 'string' ? feedback : JSON.stringify(feedback),
-                session_id: currentSessionId || APP_SESSION_ID
-            };
-
-            console.log('📝 Feedback request body:', JSON.stringify(requestBody, null, 2));
-
-            const response = await safeFetch(feedbackUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.log('❌ Feedback error response:', errorText);
-                throw new Error(`Feedback submission failed: ${response.status} - ${errorText}`);
-            }
-
-            const responseText = await response.text();
-            console.log('✅ Feedback response body:', responseText);
-
-            setMessages(prev => prev.map(msg =>
-                msg.message === messageText && !msg.isUser ? {
-                    ...msg,
-                    feedback: feedback
-                } : msg
-            ));
-
-            console.log('✅ Feedback submitted successfully');
-            clearError();
-
-        } catch (error) {
-            console.error('❌ Feedback submission error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Failed to submit feedback';
-            setError(errorMessage);
-            throw new Error(errorMessage);
+        if (!aiMessage) {
+            throw new Error('Message not found for feedback');
         }
-    }, [authContext, clearError, messages, currentSessionId, getCurrentUserId]);
 
+        const feedbackUrl = `${API_CONFIG.CHAT_API_BASE_URL}/feedback`;
+
+        // Extract just the feedback text
+        let feedbackText = '';
+        if (typeof feedback === 'string') {
+            feedbackText = feedback;
+        } else if (feedback && typeof feedback === 'object' && feedback.feedback) {
+            feedbackText = feedback.feedback;
+        } else {
+            feedbackText = String(feedback || '');
+        }
+
+        const requestBody = {
+            message_id: aiMessage.id,
+            user_id: getCurrentUserId(),
+            feedback: feedbackText, // ← Just the text, not JSON
+            session_id: currentSessionId || APP_SESSION_ID
+        };
+
+        console.log('📝 Feedback request body:', JSON.stringify(requestBody, null, 2));
+
+        const response = await safeFetch(feedbackUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log('❌ Feedback error response:', errorText);
+            throw new Error(`Feedback submission failed: ${response.status} - ${errorText}`);
+        }
+
+        const responseText = await response.text();
+        console.log('✅ Feedback response body:', responseText);
+
+        setMessages(prev => prev.map(msg =>
+            msg.message === messageText && !msg.isUser ? {
+                ...msg,
+                feedback: feedbackText // ← Store just the text
+            } : msg
+        ));
+
+        console.log('✅ Feedback submitted successfully');
+        clearError();
+
+    } catch (error) {
+        console.error('❌ Feedback submission error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to submit feedback';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+    }
+}, [authContext, clearError, messages, currentSessionId, getCurrentUserId]);
     const testNetwork = useCallback(async () => {
         console.log('🧪 Starting network connectivity test...');
         setError(null);

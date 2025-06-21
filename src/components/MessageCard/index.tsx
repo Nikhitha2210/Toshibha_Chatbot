@@ -7,7 +7,8 @@ import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import FeedbackModal from '../Feedback/Feedback';
 import SourceModal from '../Source';
 import { useThemeContext } from '../../context/ThemeContext';
-import { useChat } from '../../context/ChatContext';
+import { SourceReference, useChat } from '../../context/ChatContext';
+import SourcePills from '../SourcePills/SourcePills';
 
 interface HighlightData {
     title: string;
@@ -16,12 +17,12 @@ interface HighlightData {
     description: string;
 }
 
-export interface SourceReference {
-    filename: string;
-    pages: string;
-    awsLink: string;
-    url?: string;
-}
+// export interface SourceReference {
+//     filename: string;
+//     pages: string;
+//     awsLink: string;
+//     url?: string;
+// }
 
 interface MessageCardProps {
     time: string;
@@ -202,20 +203,27 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     <TypingDots />
                 </View>
             ) : (
-                <Text style={[
-                    styles.messageText,
-                    isErrorMessage && {
-                        color: '#f44336',
-                        backgroundColor: '#ffebee',
-                        padding: 10,
-                        borderRadius: 6,
-                        fontFamily: 'monospace',
-                        fontSize: 13
-                    }
-                ]}>
-                    {message}
-                    {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
-                </Text>
+                <>
+                    <Text style={[
+                        styles.messageText,
+                        isErrorMessage && {
+                            color: '#f44336',
+                            backgroundColor: '#ffebee',
+                            padding: 10,
+                            borderRadius: 6,
+                            fontFamily: 'monospace',
+                            fontSize: 13
+                        }
+                    ]}>
+                        {message}
+                        {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
+                    </Text>
+
+                    {/* Add Source Pills here */}
+                    {!isUser && sources && sources.length > 0 && (
+                        <SourcePills sources={sources} theme={theme} />
+                    )}
+                </>
             )}
 
             {isErrorMessage && (
