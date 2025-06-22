@@ -142,6 +142,9 @@ type ChatContextType = {
     clearAllUserData: () => Promise<void>;
     addNewSession: () => void;
     cleanupEmptySessions: () => Promise<void>;
+    getCurrentUserId: () => string; // ← Add this line
+    enhancedAutoSave: (sessionData: ChatSession) => Promise<void>; // ← Add this line
+    hasSessionContent: (sessionMessages: ChatMessage[]) => boolean; // ← Add this line
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -1052,292 +1055,316 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
 }, []);
 
     // ✅ CRITICAL: Enhanced sendMessage with crash prevention
-    const sendMessage = useCallback(async (text: string) => {
-        if (!text.trim() || isLoading) {
-            console.log('⏭️ Skipping send - empty text or already loading');
+ const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) {
+        console.log('⏭️ Skipping send - empty text or already loading');
+        return;
+    }
+
+    console.log('=== 🚀 STARTING SEND MESSAGE ===');
+    
+    // ✅ FIXED: Declare isRequestCancelled at the very beginning
+    let isRequestCancelled = false;
+    let cleanupFunctions: (() => void)[] = [];
+    
+    try {
+        if (!currentSessionId) {
+            const newSessionId = uuidv4();
+            setCurrentSessionId(newSessionId);
+            console.log('🆕 Created new session:', newSessionId);
+        }
+
+        // ✅ FIXED: Better session validation
+        const isSessionValid = await authContext.validateSessionBeforeRequest();
+        if (!isSessionValid) {
+            setError('Session expired. Please log in again.');
+            return; // Exit gracefully
+        }
+
+        if (isRequestCancelled) {
+            console.log('🚫 Request was cancelled');
             return;
         }
 
-        console.log('=== 🚀 STARTING SEND MESSAGE ===');
+        setIsLoading(true);
+        setError(null);
+
+        await saveRecentQuery(text);
+
+        // Generate consistent IDs at the top
+        const userMessageId = uuidv4();
+        const aiMessageId = uuidv4();
         
-        // Create cleanup function to prevent memory leaks
-        let cleanupFunctions: (() => void)[] = [];
-        let isRequestCancelled = false;
+        const token = authContext.state.tokens?.access_token;
+        if (!token) {
+            throw new Error('No authentication token available');
+        }
+
+        const userMessage: ChatMessage = {
+            id: userMessageId,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            message: text,
+            isUser: true,
+            sources: [],
+            highlight: {
+                title: "Your Query",
+                rating: 0,
+                reviews: 0,
+                description: text
+            }
+        };
+
+        addMessage(userMessage);
+
+        const aiMessage: ChatMessage = {
+            id: aiMessageId,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            message: '',
+            isUser: false,
+            isStreaming: true,
+            agentStatus: 'Processing your request...',
+            sources: [],
+            highlight: {
+                title: "AI Response",
+                rating: 4.8,
+                reviews: 8399,
+                description: "Processing your request..."
+            }
+        };
+
+        addMessage(aiMessage);
+
+        const requestBody = {
+            query: text,
+            qid: aiMessageId,
+            uid: getCurrentUserId(),
+            sid: currentSessionId || APP_SESSION_ID,
+            messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
+                content: msg.message,
+                isBot: !msg.isUser
+            })),
+            collection: 'chatbot'
+        };
+
+        const chatUrl = getChatApiUrl('/run');
+        console.log('📡 Sending chat request to:', chatUrl);
+
+        // ✅ CRITICAL: Improved status polling with cleanup
+        let statusInterval: NodeJS.Timeout | null = null;
         
-        try {
-            if (!currentSessionId) {
-                const newSessionId = uuidv4();
-                setCurrentSessionId(newSessionId);
-                console.log('🆕 Created new session:', newSessionId);
-            }
-
-            const isSessionValid = await authContext.validateSessionBeforeRequest();
-            if (!isSessionValid || isRequestCancelled) {
-                throw new Error('Session expired. Please log in again.');
-            }
-
-            setIsLoading(true);
-            setError(null);
-
-            await saveRecentQuery(text);
-
- // Generate consistent IDs at the top
-const userMessageId = uuidv4();
-const aiMessageId = uuidv4(); // This will be used as qid for backend
-const token = authContext.state.tokens?.access_token;
-if (!token) {
-    throw new Error('No authentication token available');
-}
-const userMessage: ChatMessage = {
-    id: userMessageId,  // ← Changed
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    message: text,
-    isUser: true,
-    sources: [],
-    highlight: {
-        title: "Your Query",
-        rating: 0,
-        reviews: 0,
-        description: text
-    }
-};
-
-addMessage(userMessage);
-
-const aiMessage: ChatMessage = {
-    id: aiMessageId,  // ← Same ID that will be used as qid
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    message: '',
-    isUser: false,
-    isStreaming: true,
-    agentStatus: 'Processing your request...',
-    sources: [],
-    highlight: {
-        title: "AI Response",
-        rating: 4.8,
-        reviews: 8399,
-        description: "Processing your request..."
-    }
-};
-
-addMessage(aiMessage);
-
-
-const requestBody = {
-    query: text,
-    qid: aiMessageId,  // ← Changed: use same ID as AI message
-    uid: getCurrentUserId(),
-    sid: currentSessionId || APP_SESSION_ID,
-    messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
-        content: msg.message,
-        isBot: !msg.isUser
-    })),
-    collection: 'chatbot'
-};
-
-            const chatUrl = getChatApiUrl('/run');
-            console.log('📡 Sending chat request to:', chatUrl);
-
-            // ✅ CRITICAL: Improved status polling with cleanup
-            let statusInterval: NodeJS.Timeout | null = null;
+        const startStatusPolling = () => {
+            const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${currentSessionId || APP_SESSION_ID}`);
             
-            const startStatusPolling = () => {
-                const statusUrl = getChatApiUrl(`/currentStatus?uid=${requestBody.uid}&sid=${currentSessionId || APP_SESSION_ID}`);
-                statusInterval = setInterval(async () => {
-                    if (isRequestCancelled) {
-                        if (statusInterval) {
-                            clearInterval(statusInterval);
-                            statusInterval = null;
-                        }
-                        return;
+            statusInterval = setInterval(async () => {
+                if (isRequestCancelled) {
+                    if (statusInterval) {
+                        clearInterval(statusInterval);
+                        statusInterval = null;
                     }
+                    return;
+                }
 
-                    try {
-                        // Create timeout controller for status polling
-                        const statusController = new AbortController();
-                        const statusTimeoutId = setTimeout(() => statusController.abort(), 5000);
+                try {
+                    const statusController = new AbortController();
+                    const statusTimeoutId = setTimeout(() => statusController.abort(), 5000);
+                    
+                    const statusResponse = await safeFetch(statusUrl, {
+                        signal: statusController.signal
+                    });
+                    
+                    clearTimeout(statusTimeoutId);
+                    
+                    if (statusResponse.ok) {
+                        const statusText = await statusResponse.text();
                         
-                        const statusResponse = await safeFetch(statusUrl, {
-                            signal: statusController.signal
-                        });
-                        
-                        clearTimeout(statusTimeoutId);
-                        
-                        if (statusResponse.ok) {
-                            const statusText = await statusResponse.text();
-                            
-                            // Better parsing with error handling
-                            try {
-                                const lines = statusText.split('\n');
-                                for (const line of lines) {
-                                    if (line.startsWith('data: ') && !isRequestCancelled) {
-                                        const data = JSON.parse(line.substring(6));
-                                        if (data.status) {
-                                            updateMessage(aiMessageId, {
-                                                agentStatus: data.status,
-                                                isStreaming: true
-                                            });
-                                        }
+                        try {
+                            const lines = statusText.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ') && !isRequestCancelled) {
+                                    const data = JSON.parse(line.substring(6));
+                                    if (data.status) {
+                                        updateMessage(aiMessageId, {
+                                            agentStatus: data.status,
+                                            isStreaming: true
+                                        });
                                     }
                                 }
-                            } catch (parseError) {
-                                // Ignore JSON parse errors for status polling
                             }
+                        } catch (parseError) {
+                            // Ignore JSON parse errors for status polling
                         }
-                    } catch (statusError) {
-                        // Ignore status polling errors to prevent crashes
                     }
-                }, 3000);
-            };
-
-            const stopStatusPolling = () => {
-                if (statusInterval) {
-                    clearInterval(statusInterval);
-                    statusInterval = null;
-                    console.log('🛑 Status polling stopped');
+                } catch (statusError) {
+                    // Ignore status polling errors to prevent crashes
                 }
-            };
+            }, 3000);
+        };
 
-            // Add cleanup function
-            cleanupFunctions.push(stopStatusPolling);
+        const stopStatusPolling = () => {
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+                console.log('🛑 Status polling stopped');
+            }
+        };
 
-            startStatusPolling();
+        // Add cleanup function
+        cleanupFunctions.push(stopStatusPolling);
 
-            // ✅ CRITICAL: API call with timeout and abort controller
-            const abortController = new AbortController();
-            cleanupFunctions.push(() => abortController.abort());
+        startStatusPolling();
 
-            const response = await safeApiCall(async () => {
-                const res = await safeFetch(chatUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify(requestBody),
-                    signal: abortController.signal
+        // ✅ CRITICAL: API call with timeout and abort controller
+        const abortController = new AbortController();
+        cleanupFunctions.push(() => {
+            isRequestCancelled = true; // Set cancellation flag
+            abortController.abort();
+        });
+
+        const response = await safeApiCall(async () => {
+            const res = await safeFetch(chatUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(requestBody),
+                signal: abortController.signal
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.log('❌ Chat API error response:', errorText);
+                throw new Error(`HTTP ${res.status}: ${errorText || 'Chat request failed'}`);
+            }
+
+            return res;
+        });
+
+        if (isRequestCancelled) {
+            console.log('🚫 Request cancelled, stopping...');
+            return;
+        }
+
+        console.log('✅ Chat response received');
+
+        const responseText = await response.text();
+        console.log('📝 Full response length:', responseText.length);
+
+        let fullMessage = '';
+
+        if (responseText && !isRequestCancelled) {
+            try {
+                const jsonResponse = JSON.parse(responseText);
+                fullMessage = jsonResponse.message || jsonResponse.response || jsonResponse.text || responseText;
+            } catch {
+                fullMessage = responseText;
+            }
+
+            // ✅ CRITICAL: Controlled streaming with cancellation check
+            const words = fullMessage.split(' ');
+            for (let i = 0; i < words.length && !isRequestCancelled; i += 3) {
+                const chunk = words.slice(0, i + 3).join(' ');
+                updateMessage(aiMessageId, {
+                    message: chunk,
+                    isStreaming: true
                 });
 
-                if (!res.ok) {
-                    const errorText = await res.text();
-                    console.log('❌ Chat API error response:', errorText);
-                    throw new Error(`HTTP ${res.status}: ${errorText || 'Chat request failed'}`);
-                }
-
-                return res;
-            });
-
-            if (isRequestCancelled) {
-                console.log('🚫 Request cancelled, stopping...');
-                return;
+                await new Promise(resolve => setTimeout(resolve, 50));
             }
-
-            console.log('✅ Chat response received');
-
-            const responseText = await response.text();
-            console.log('📝 Full response length:', responseText.length);
-
-            let fullMessage = '';
-            let extractedSources: SourceReference[] = [];
-
-            if (responseText && !isRequestCancelled) {
-                try {
-                    const jsonResponse = JSON.parse(responseText);
-                    fullMessage = jsonResponse.message || jsonResponse.response || jsonResponse.text || responseText;
-                } catch {
-                    fullMessage = responseText;
-                }
-
-                // ✅ CRITICAL: Controlled streaming with cancellation check
-                const words = fullMessage.split(' ');
-                for (let i = 0; i < words.length && !isRequestCancelled; i += 3) {
-                    const chunk = words.slice(0, i + 3).join(' ');
-                    updateMessage(aiMessageId, {
-                        message: chunk,
-                        isStreaming: true
-                    });
-
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-            }
-
-            stopStatusPolling();
-
-            if (!isRequestCancelled) {
-    const extractedSources = extractSourcesFromText(fullMessage);
-    const cleanedMessage = cleanMessageText(fullMessage, extractedSources);
-    
-    updateMessage(aiMessageId, {
-        message: cleanedMessage, // Use cleaned text without source tags
-        isStreaming: false,
-        agentStatus: undefined,
-        sources: extractedSources,
-        highlight: {
-            title: "AI Response",
-            rating: 4.8,
-            reviews: 8399,
-            description: "Response completed"
         }
-    });
 
-    console.log('✅ Message processing completed successfully');
-}
+        stopStatusPolling();
 
-        } catch (error) {
-            console.error('❌ Send message error:', error);
-
-            // Clean up all resources
-            cleanupFunctions.forEach(cleanup => {
-                try {
-                    cleanup();
-                } catch (err) {
-                    // Ignore cleanup errors
-                }
-            });
-
-            if (!isRequestCancelled) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
-                setError(errorMessage);
-
-                const aiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
-                if (aiMessages.length > 0) {
-                    updateMessage(aiMessages[0].id, {
-                        message: `Error: ${errorMessage}`,
-                        isStreaming: false,
-                        agentStatus: undefined,
-                        sources: [],
-                        highlight: {
-                            title: "Error",
-                            rating: 0,
-                            reviews: 0,
-                            description: "Failed to get response"
-                        }
-                    });
-                }
-            }
-        } finally {
-            // Always cleanup, even on success
-            cleanupFunctions.forEach(cleanup => {
-                try {
-                    cleanup();
-                } catch (err) {
-                    // Ignore cleanup errors
-                }
-            });
+        if (!isRequestCancelled) {
+            const extractedSources = extractSourcesFromText(fullMessage);
+            const cleanedMessage = cleanMessageText(fullMessage, extractedSources);
             
-            setIsLoading(false);
+            updateMessage(aiMessageId, {
+                message: cleanedMessage,
+                isStreaming: false,
+                agentStatus: undefined,
+                sources: extractedSources,
+                highlight: {
+                    title: "AI Response",
+                    rating: 4.8,
+                    reviews: 8399,
+                    description: "Response completed"
+                }
+            });
+
+            console.log('✅ Message processing completed successfully');
         }
-    }, [
-        messages, 
-        isLoading, 
-        addMessage, 
-        updateMessage, 
-        authContext, 
-        currentSessionId, 
-        saveRecentQuery, 
-        getCurrentUserId, 
-        extractSourcesFromText
-    ]);
+
+    } catch (error) {
+        console.error('❌ Send message error:', error);
+
+        // Clean up all resources
+        cleanupFunctions.forEach(cleanup => {
+            try {
+                cleanup();
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        });
+
+        if (!isRequestCancelled) {
+            let errorMessage = 'Failed to get response';
+            
+            if (error instanceof Error) {
+                if (error.message.includes('Session expired')) {
+                    errorMessage = 'Your session has expired. Please log in again.';
+                } else if (error.message.includes('Network request failed')) {
+                    errorMessage = 'Cannot connect to server. Please check your internet connection.';
+                } else if (error.message.includes('timeout')) {
+                    errorMessage = 'Request timed out. Please try again.';
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+            
+            setError(errorMessage);
+
+            // Update any streaming AI messages with error
+            const streamingAiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
+            if (streamingAiMessages.length > 0) {
+                updateMessage(streamingAiMessages[0].id, {
+                    message: `Error: ${errorMessage}`,
+                    isStreaming: false,
+                    agentStatus: undefined,
+                    sources: [],
+                    highlight: {
+                        title: "Error",
+                        rating: 0,
+                        reviews: 0,
+                        description: "Failed to get response"
+                    }
+                });
+            }
+        }
+    } finally {
+        // Always cleanup and stop loading
+        cleanupFunctions.forEach(cleanup => {
+            try {
+                cleanup();
+            } catch (err) {
+                // Ignore cleanup errors
+            }
+        });
+        
+        setIsLoading(false);
+    }
+}, [
+    messages, 
+    isLoading, 
+    addMessage, 
+    updateMessage, 
+    authContext, 
+    currentSessionId, 
+    saveRecentQuery, 
+    getCurrentUserId, 
+    extractSourcesFromText,
+    cleanMessageText
+]);
 
 const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
   try {
@@ -1633,33 +1660,36 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
     }, []);
 
     return (
-        <ChatContext.Provider value={{
-            messages,
-            sessions,
-            recentQueries,
-            currentSessionId,
-            selectedSession,
-            addMessage,
-            clearMessages,
-            sendMessage,
-            submitVote,
-            submitFeedback,
-            isLoading,
-            startNewSession,
-            loadSession,
-            setSelectedSession,
-            error,
-            clearError,
-            testNetwork,
-            loadUserSessions,
-            refreshChatHistory,
-            clearAllUserData,
-            addNewSession,
-            cleanupEmptySessions,
-        }}>
-            {children}
-        </ChatContext.Provider>
-    );
+    <ChatContext.Provider value={{
+        messages,
+        sessions,
+        recentQueries,
+        currentSessionId,
+        selectedSession,
+        addMessage,
+        clearMessages,
+        sendMessage,
+        submitVote,
+        submitFeedback,
+        isLoading,
+        startNewSession,
+        loadSession,
+        setSelectedSession,
+        error,
+        clearError,
+        testNetwork,
+        loadUserSessions,
+        refreshChatHistory,
+        clearAllUserData,
+        addNewSession,
+        cleanupEmptySessions,
+        getCurrentUserId, // ← Add this line
+        enhancedAutoSave, // ← Add this line
+        hasSessionContent, // ← Add this line
+    }}>
+        {children}
+    </ChatContext.Provider>
+);
 };
 
 export const useChat = () => {

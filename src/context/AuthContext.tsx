@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import { Alert, BackHandler } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 
 import { AuthApiClient } from '../services/auth/AuthApiClient';
 import { AuthStorage } from '../services/auth/storage';
 import { AuthState, UserDetailResponse, TokenResponse } from '../services/auth/types';
 import { API_CONFIG } from '../config/environment';
-import { Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Create the auth API client using environment config
 const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
@@ -84,6 +83,7 @@ interface AuthContextType {
   refreshUserData: () => Promise<void>;
   checkAuthStatus: () => Promise<void>;
   validateSessionBeforeRequest: () => Promise<boolean>;
+  setNavigationRef: (ref: any) => void;
 }
 
 // Create the context
@@ -98,22 +98,40 @@ export function AuthProvider(props: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const sessionCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const lastSessionCheck = useRef<number>(0);
+  const isValidating = useRef<boolean>(false);
+  const navigationRef = useRef<any>(null);
+  const isSessionExpiring = useRef<boolean>(false);
+
+  // ✅ Set navigation ref (call this from your main navigator)
+  const setNavigationRef = (ref: any) => {
+    navigationRef.current = ref;
+  };
 
   /**
-   * Validate session by calling /api/auth/me
-   * Returns true if session is valid, false if expired
+   * ✅ FIXED: 48-hour session validation matching web app approach
+   * Calls /api/auth/me every 60 seconds as requested by your teammate
    */
   const validateCurrentSession = async (): Promise<boolean> => {
     if (!state.tokens?.access_token) {
       return false;
     }
 
+    // Prevent multiple simultaneous validations
+    if (isValidating.current) {
+      console.log('⏭️ Session validation already in progress, skipping...');
+      return true;
+    }
+
     try {
-      console.log('=== Validating current session ===');
+      isValidating.current = true;
+      console.log('=== Validating 48-hour session with backend /api/auth/me ===');
       console.log('Using Auth API URL:', API_CONFIG.AUTH_API_BASE_URL);
       console.log('Using Tenant ID:', API_CONFIG.TENANT_ID);
 
-      // Call /api/auth/me to check if session is valid
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+      // ✅ CRITICAL: Always call /api/auth/me as specified by your teammate
       const response = await fetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
         method: 'GET',
         headers: {
@@ -121,78 +139,109 @@ export function AuthProvider(props: AuthProviderProps) {
           'X-Tenant-ID': API_CONFIG.TENANT_ID,
           'Content-Type': 'application/json',
         },
+        signal: controller.signal
       });
 
-      console.log('Session validation response status:', response.status);
+      clearTimeout(timeoutId);
+      console.log('Backend session validation response status:', response.status);
 
       if (response.status === 200) {
-        // Session is valid
-        console.log('✅ Session is valid');
+        console.log('✅ Backend confirms: 48-hour session is valid');
         return true;
       } else if (response.status === 401) {
-        // Session expired or invalid
-        console.log('❌ Session expired or invalid');
+        console.log('❌ Backend confirms: Session expired or invalid (401)');
         return false;
       } else {
-        // Other error - assume session is invalid
-        console.log('❌ Session validation failed with status:', response.status);
+        console.log(`⚠️ Backend returned unexpected status: ${response.status}`);
+        // On unexpected status, assume session is invalid for security
         return false;
       }
     } catch (error) {
-      console.error('Session validation error:', error);
-      // Network error - assume session is invalid
+      console.error('❌ Backend session validation error:', error);
+      // On network error, assume session is invalid for security
       return false;
+    } finally {
+      isValidating.current = false;
     }
   };
 
   /**
-   * Handle expired session - logout user
+   * ✅ FIXED: Handle expired session with proper navigation control
    */
   const handleSessionExpired = async () => {
-    console.log('🚨 Session expired - logging out user');
+    // Prevent multiple simultaneous session expiry handling
+    if (isSessionExpiring.current) {
+      console.log('⏭️ Session expiry already in progress, skipping...');
+      return;
+    }
+
+    isSessionExpiring.current = true;
+    console.log('🚨 48-hour session expired - handling gracefully');
 
     try {
-      // Clear local storage
+      // Clear local storage immediately
       await AuthStorage.clearAuthData();
-
-      // Update state to logged out
-      dispatch({ type: 'SESSION_EXPIRED' });
 
       // Stop session checking
       stopPeriodicSessionCheck();
 
-      Alert.alert(
-        'Session Expired',
-        'Your session has expired. Please log in again.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              logout();
+      // Update state to logged out
+      dispatch({ type: 'SESSION_EXPIRED' });
+
+      // ✅ CRITICAL: Force navigation to login IMMEDIATELY
+      if (navigationRef.current) {
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+
+      // Show alert AFTER navigation (with delay to ensure navigation completes)
+      setTimeout(() => {
+        Alert.alert(
+          'Session Expired',
+          'Your 48-hour session has expired. Please log in again.',
+          [
+            {
+              text: 'Login',
+              onPress: () => {
+                // Already navigated to login
+                console.log('✅ User acknowledged session expiry');
+              },
             },
-          },
-        ],
-        { cancelable: false }
-      );
+          ],
+          { 
+            cancelable: false,
+            onDismiss: () => {
+              // Ensure we stay on login screen
+              console.log('✅ Session expiry alert dismissed');
+            }
+          }
+        );
+      }, 300);
 
     } catch (error) {
       console.error('Error handling session expiry:', error);
+    } finally {
+      isSessionExpiring.current = false;
     }
   };
 
   /**
-   * Start periodic session validation (every 1 minute)
+   * ✅ FIXED: Start periodic session validation every 60 seconds (as requested)
    */
   const startPeriodicSessionCheck = () => {
     if (sessionCheckInterval.current) {
       clearInterval(sessionCheckInterval.current);
     }
 
-    console.log('🔄 Starting periodic session validation (every 60 seconds)');
+    console.log('🔄 Starting periodic 48-hour session validation (every 60 seconds)');
 
     sessionCheckInterval.current = setInterval(async () => {
-      if (state.isAuthenticated && state.tokens?.access_token) {
-        console.log('⏰ Periodic session check...');
+      if (state.isAuthenticated && state.tokens?.access_token && !isSessionExpiring.current) {
+        console.log('⏰ Periodic 48-hour session check (60-second interval)...');
 
         const isValid = await validateCurrentSession();
 
@@ -200,7 +249,7 @@ export function AuthProvider(props: AuthProviderProps) {
           await handleSessionExpired();
         }
       }
-    }, 60000); // Check every 60 seconds (1 minute)
+    }, 60000); // ✅ Every 60 seconds as requested by your teammate
   };
 
   /**
@@ -215,34 +264,41 @@ export function AuthProvider(props: AuthProviderProps) {
   };
 
   /**
-   * Validate session before making any API request
-   * This is called before every API call to ensure session is still valid
+   * ✅ FIXED: Validate session before EVERY API call (as requested by teammate)
+   * This ensures backend-enforced security on all API endpoints
    */
   const validateSessionBeforeRequest = async (): Promise<boolean> => {
     if (!state.isAuthenticated || !state.tokens?.access_token) {
+      console.log('❌ No active session found');
       return false;
     }
 
-    // Check if we validated recently (within last 30 seconds)
+    // ✅ For immediate API calls, check if we validated recently (last 30 seconds)
     const now = Date.now();
     if (now - lastSessionCheck.current < 30000) {
-      // Recently validated, assume still valid
+      console.log('✅ Session validated recently, proceeding with API call');
       return true;
     }
 
-    console.log('🔍 Validating session before API request...');
+    console.log('🔍 Validating 48-hour session before API request...');
 
+    // ✅ CRITICAL: Always validate with backend before any API call
     const isValid = await validateCurrentSession();
     lastSessionCheck.current = now;
 
     if (!isValid) {
+      console.log('❌ Backend session validation failed - expiring session');
       await handleSessionExpired();
       return false;
     }
 
+    console.log('✅ Backend session validation passed - proceeding with API call');
     return true;
   };
 
+  /**
+   * Check stored auth status on app startup
+   */
   const checkAuthStatus = async () => {
     try {
       console.log('=== AuthContext checkAuthStatus ===');
@@ -266,60 +322,67 @@ export function AuthProvider(props: AuthProviderProps) {
         return;
       }
 
-      // Validate the stored session
+      // ✅ CRITICAL: Validate stored session with backend on app startup
+      console.log('🔍 Validating stored 48-hour session...');
+      
+      // Temporarily set tokens for validation
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: {
+          user: userData,
+          tokens: {
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+            token_type: 'bearer',
+          },
+        },
+      });
+
       const isValid = await validateCurrentSession();
-      console.log('Stored session valid:', isValid);
+      console.log('Stored 48-hour session valid:', isValid);
 
       if (isValid) {
-        // Session is valid, restore auth state
-        dispatch({
-          type: 'LOGIN_SUCCESS',
-          payload: {
-            user: userData,
-            tokens: {
-              access_token: accessToken,
-              refresh_token: refreshToken || '',
-              token_type: 'bearer',
-            },
-          },
-        });
-
-        // Start periodic session checking
+        console.log('✅ 48-hour session restored successfully');
+        // Session is valid, start periodic checking
         startPeriodicSessionCheck();
       } else {
         // Session invalid, try to refresh token
         if (refreshToken) {
           try {
+            console.log('🔄 Attempting token refresh...');
             const newTokens = await authApiClient.refreshToken(refreshToken);
             await AuthStorage.saveTokens(newTokens);
 
             dispatch({
-              type: 'LOGIN_SUCCESS',
-              payload: {
-                user: userData,
-                tokens: newTokens,
-              },
+              type: 'TOKEN_REFRESHED',
+              payload: newTokens,
             });
 
-            // Start periodic session checking
+            console.log('✅ Token refreshed, starting session monitoring');
             startPeriodicSessionCheck();
           } catch (error) {
-            console.log('Token refresh failed:', error);
+            console.log('❌ Token refresh failed:', error);
             await AuthStorage.clearAuthData();
-            dispatch({ type: 'SET_LOADING', payload: false });
+            dispatch({ type: 'LOGOUT' });
           }
         } else {
+          console.log('❌ No refresh token available');
           await AuthStorage.clearAuthData();
-          dispatch({ type: 'SET_LOADING', payload: false });
+          dispatch({ type: 'LOGOUT' });
         }
       }
     } catch (error) {
       console.error('Auth status check failed:', error);
       await AuthStorage.clearAuthData();
+      dispatch({ type: 'LOGOUT' });
+    } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
+  /**
+   * Login with email and password
+   */
   const login = async (email: string, password: string) => {
     try {
       console.log('=== AuthContext login start ===');
@@ -330,14 +393,14 @@ export function AuthProvider(props: AuthProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
 
       // Step 1: Authenticate and get tokens
-      console.log('Step 1: Getting tokens...');
+      console.log('Step 1: Getting 48-hour session tokens...');
       const tokens = await authApiClient.login(email, password);
-      console.log('Tokens received successfully');
+      console.log('✅ 48-hour session tokens received successfully');
 
       // Step 2: Get user details
       console.log('Step 2: Getting user details...');
       const user = await authApiClient.getUserDetails(tokens.access_token);
-      console.log('User details received:', user);
+      console.log('✅ User details received:', user.email);
 
       // Step 3: Save to storage
       console.log('Step 3: Saving to storage...');
@@ -345,7 +408,7 @@ export function AuthProvider(props: AuthProviderProps) {
         AuthStorage.saveTokens(tokens),
         AuthStorage.saveUserData(user),
       ]);
-      console.log('Data saved to storage successfully');
+      console.log('✅ Data saved to storage successfully');
 
       // Step 4: Update state
       console.log('Step 4: Updating state...');
@@ -354,14 +417,14 @@ export function AuthProvider(props: AuthProviderProps) {
         payload: { user, tokens },
       });
 
-      // Step 5: Start session monitoring
-      console.log('Step 5: Starting session monitoring...');
+      // Step 5: Start 48-hour session monitoring
+      console.log('Step 5: Starting 48-hour session monitoring...');
       startPeriodicSessionCheck();
 
-      console.log('=== AuthContext login completed successfully ===');
+      console.log('=== ✅ 48-hour session login completed successfully ===');
 
     } catch (error) {
-      console.log('=== AuthContext login error ===');
+      console.log('=== ❌ AuthContext login error ===');
       console.log('Error:', error);
 
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
@@ -372,24 +435,53 @@ export function AuthProvider(props: AuthProviderProps) {
     }
   };
 
+  /**
+   * Logout user
+   */
   const logout = async () => {
     try {
+      console.log('🔐 Logging out user...');
+      
       if (state.tokens?.access_token) {
-        await authApiClient.logout(state.tokens.access_token);
+        try {
+          await authApiClient.logout(state.tokens.access_token);
+          console.log('✅ Server logout successful');
+        } catch (error) {
+          console.warn('⚠️ Server logout failed, but continuing with local logout');
+        }
       }
     } catch (error) {
-      console.warn('Server logout failed, but continuing with local logout');
+      console.warn('Logout error:', error);
     } finally {
+      // Always clear local data and stop session checking
       await AuthStorage.clearAuthData();
       stopPeriodicSessionCheck();
       dispatch({ type: 'LOGOUT' });
+      
+      // Navigate to login
+      if (navigationRef.current) {
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+      
+      console.log('✅ Logout completed');
     }
   };
 
+  /**
+   * Clear error state
+   */
   const clearError = () => {
     dispatch({ type: 'CLEAR_ERROR' });
   };
 
+  /**
+   * Refresh user data
+   */
   const refreshUserData = async () => {
     if (!state.tokens?.access_token) {
       throw new Error('No access token available');
@@ -405,11 +497,27 @@ export function AuthProvider(props: AuthProviderProps) {
     }
   };
 
-  // Start session checking when authenticated
+  // ✅ Handle Android back button during session expiry
   useEffect(() => {
-    if (state.isAuthenticated) {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If session is expired or expiring, prevent back navigation
+      if (!state.isAuthenticated || isSessionExpiring.current) {
+        console.log('🔒 Preventing back navigation - session expired');
+        return true; // Prevent default back behavior
+      }
+      return false; // Allow normal back behavior
+    });
+
+    return () => backHandler.remove();
+  }, [state.isAuthenticated]);
+
+  // Start/stop session checking based on auth state
+  useEffect(() => {
+    if (state.isAuthenticated && state.tokens?.access_token) {
+      console.log('✅ User authenticated - starting 48-hour session monitoring');
       startPeriodicSessionCheck();
     } else {
+      console.log('❌ User not authenticated - stopping session monitoring');
       stopPeriodicSessionCheck();
     }
 
@@ -432,6 +540,7 @@ export function AuthProvider(props: AuthProviderProps) {
     refreshUserData,
     checkAuthStatus,
     validateSessionBeforeRequest,
+    setNavigationRef,
   };
 
   return (

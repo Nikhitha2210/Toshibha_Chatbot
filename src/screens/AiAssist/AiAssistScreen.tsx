@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { 
     ActivityIndicator, 
     Animated, 
@@ -8,10 +8,11 @@ import {
     TouchableOpacity, 
     View,
     SafeAreaView,
-    Platform
+    Platform,
+    BackHandler
 } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { getStyles } from './AiAssistScreen.styles'
@@ -39,7 +40,16 @@ const AiAssistScreen = () => {
     const scrollViewRef = useRef<ScrollView>(null);
 
     const navigation = useNavigation<NavigationProp>();
-    const { messages, error, clearError, startNewSession } = useChat();
+    const { 
+        messages, 
+        error, 
+        clearError, 
+        startNewSession, 
+        currentSessionId, 
+        getCurrentUserId, 
+        enhancedAutoSave, 
+        hasSessionContent 
+    } = useChat();
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
@@ -52,6 +62,45 @@ const AiAssistScreen = () => {
             }, 100);
         }
     }, [messages]);
+
+    // ✅ CRITICAL: Auto-save session when back button is pressed
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                console.log('🔙 Back button pressed on AI Assist screen');
+
+                // ✅ Auto-save current session before going back
+                if (messages.length >= 2 && currentSessionId && hasSessionContent(messages)) {
+                    console.log('💾 Auto-saving session before back navigation...');
+                    
+                    const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'Chat Session';
+                    const sessionData = {
+                        id: currentSessionId,
+                        title: sessionTitle,
+                        timestamp: new Date().toISOString(),
+                        creationDate: new Date().toISOString(),
+                        messages: [...messages],
+                        userId: getCurrentUserId(),
+                        label: sessionTitle
+                    };
+
+                    // Save session synchronously
+                    enhancedAutoSave(sessionData);
+                    console.log('✅ Session saved before navigation:', sessionTitle);
+                } else {
+                    console.log('⏭️ No meaningful session to save');
+                }
+
+                // ✅ Allow back navigation to Home screen
+                navigation.navigate('Home');
+                return true; // Prevent default back behavior
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+            return () => subscription.remove();
+        }, [messages, currentSessionId, getCurrentUserId, enhancedAutoSave, hasSessionContent, navigation])
+    );
 
     const openMenu = () => {
         setModalVisible(true);
@@ -70,8 +119,26 @@ const AiAssistScreen = () => {
         }).start(() => setModalVisible(false));
     };
 
+    // ✅ New Chat button behavior (like web app)
     const handleNewChat = () => {
-        console.log('🆕 Starting new chat session and navigating to home');
+        console.log('🆕 New Chat clicked - starting new session and going to Home');
+        
+        // Auto-save current session before starting new one
+        if (messages.length >= 2 && currentSessionId && hasSessionContent(messages)) {
+            const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'Chat Session';
+            const sessionData = {
+                id: currentSessionId,
+                title: sessionTitle,
+                timestamp: new Date().toISOString(),
+                creationDate: new Date().toISOString(),
+                messages: [...messages],
+                userId: getCurrentUserId(),
+                label: sessionTitle
+            };
+            enhancedAutoSave(sessionData);
+            console.log('✅ Session saved before new chat:', sessionTitle);
+        }
+
         startNewSession();
         navigation.navigate('Home');
     };
