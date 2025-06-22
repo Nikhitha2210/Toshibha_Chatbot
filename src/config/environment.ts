@@ -128,9 +128,19 @@ export const getAuthUrl = (endpoint: string): string => {
 
 // Helper function to generate S3 image URLs
 export const getImageUrl = (awsId: string): string => {
-  const imageUrl = `${API_CONFIG.AWS_BUCKET_URL}/${awsId}.png`;
-  console.log('🖼️ Generated S3 image URL:', imageUrl);
-  return imageUrl;
+    // ✅ Use the EXACT same method as the web app
+    const encodedAwsId = encodeURIComponent(awsId);
+    
+    // ✅ FIXED: Use web app's image endpoint format
+    const imageUrl = `https://tgcs.iopex.ai/api/images?filename=${encodedAwsId}.png`;
+    
+    console.log('🖼️ === IMAGE URL GENERATION (WEB APP STYLE) ===');
+    console.log('🔗 AWS ID:', awsId);
+    console.log('🔗 Encoded AWS ID:', encodedAwsId);
+    console.log('🖼️ Web App Style URL:', imageUrl);
+    console.log('🖼️ === IMAGE URL GENERATION END ===');
+    
+    return imageUrl;
 };
 
 // Safe fetch wrapper with enhanced error handling

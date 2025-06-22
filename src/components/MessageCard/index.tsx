@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -9,6 +9,8 @@ import SourceModal from '../Source';
 import { useThemeContext } from '../../context/ThemeContext';
 import { SourceReference, useChat } from '../../context/ChatContext';
 import SourcePills from '../SourcePills/SourcePills';
+
+
 
 interface HighlightData {
     title: string;
@@ -67,6 +69,27 @@ const MessageCard: React.FC<MessageCardProps> = ({
     hasVoted = false,
     voteType
 }) => {
+        useEffect(() => {
+        console.log('🔍 === MESSAGECARD DEBUG ===');
+        console.log('📨 Message received:', message.substring(0, 100) + '...');
+        console.log('📋 Sources array:', sources);
+        console.log('📋 Sources length:', sources?.length || 0);
+        
+        if (sources && sources.length > 0) {
+            sources.forEach((source, index) => {
+                console.log(`🖼️ Source ${index + 1} in MessageCard:`, {
+                    filename: source.filename,
+                    pages: source.pages,
+                    awsLink: source.awsLink,
+                    url: source.url,
+                    urlExists: !!source.url
+                });
+            });
+        } else {
+            console.log('❌ No sources found in MessageCard');
+        }
+        console.log('🔍 === MESSAGECARD DEBUG END ===');
+    }, [sources, message]);
     const [feedbackVisible, setFeedbackVisible] = useState(false);
     const [sourceVisible, setSourceVisible] = useState(false);
     const [activeTab, setActiveTab] = useState<'Links' | 'Images'>('Links');

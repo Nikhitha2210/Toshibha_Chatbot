@@ -23,6 +23,7 @@
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-asset": "^2.1.1",
+    "react-native-avoid-softinput": "^7.0.1",
     "react-native-device-info": "^14.0.4",
     "react-native-gesture-handler": "^2.25.0",
     "react-native-modal": "^14.0.0-rc.1",

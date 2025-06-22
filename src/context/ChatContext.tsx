@@ -982,57 +982,95 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
 const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
   try {
+    console.log('🔍 === SOURCE EXTRACTION DEBUG START ===');
+    console.log('📝 Input text length:', text.length);
+    console.log('📝 First 500 chars:', text.substring(0, 500));
+    
     const sources: SourceReference[] = [];
 
-    // Pattern to find the full source reference with aws_id
-    const fullSourcePattern = /(.*?)\s+page\s+(\d+)\s+\[aws_id:\s+(.*?)\]/g;
-    const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/g;
+    // ✅ FIXED: Use the EXACT same pattern as the web app
+    const fullSourcePattern = /(.*?)\s+page\s+(\d+)\s+\[aws_id:\s+(.*?)\]/gi;
     
     let match;
 
-    // First, try to find full source patterns
+    console.log('🔍 Searching for source patterns (web app style)...');
+    
+    // Reset regex
+    fullSourcePattern.lastIndex = 0;
+    
     while ((match = fullSourcePattern.exec(text)) !== null) {
       const filename = match[1].trim();
       const pageNum = match[2];
       const awsLink = match[3].trim();
+      
+      console.log('🎯 Found source pattern:', {
+        filename,
+        pageNum,
+        awsLink,
+        fullMatch: match[0]
+      });
+
+      // ✅ Generate URL using the same method as web app
+      const imageUrl = getImageUrl(awsLink);
+      console.log('🖼️ Generated image URL:', imageUrl);
 
       sources.push({
         filename: filename,
         pages: pageNum,
         awsLink: awsLink,
-        url: getImageUrl(awsLink), // Generate image URL
-        fullMatchText: match[0] // Store for replacement
+        url: imageUrl,
+        fullMatchText: match[0]
       });
     }
 
-    // Then find any standalone aws_id tags not caught above
+    // ✅ Also check for standalone aws_id patterns
+    const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/gi;
+    awsIdPattern.lastIndex = 0;
+    
     while ((match = awsIdPattern.exec(text)) !== null) {
       const awsLink = match[1].trim();
       
       // Check if we already have this source
       const existingSource = sources.find(s => s.awsLink === awsLink);
       if (!existingSource) {
-        // Extract filename and page from awsLink
+        console.log('🆕 Found standalone aws_id:', awsLink);
+        
+        // Extract filename and page from awsLink (like web app does)
         const parts = awsLink.split('_page_');
         if (parts.length >= 2) {
-          const filename = parts[0].replace(/_/g, ' ');
+          const filename = parts[0].replace(/_/g, ' ') + '.pdf';
           const pageNum = parts[1];
+          
+          console.log('📋 Extracted info:', { filename, pageNum });
+
+          const imageUrl = getImageUrl(awsLink);
+          console.log('🖼️ Generated image URL:', imageUrl);
 
           sources.push({
             filename: filename,
             pages: pageNum,
             awsLink: awsLink,
-            url: getImageUrl(awsLink),
-            fullMatchText: match[0]
+            url: imageUrl
           });
         }
       }
     }
 
-    console.log('📋 Extracted sources:', sources);
+    console.log('📋 === FINAL EXTRACTED SOURCES ===');
+    sources.forEach((source, index) => {
+      console.log(`Source ${index + 1}:`, {
+        filename: source.filename,
+        pages: source.pages,
+        awsLink: source.awsLink,
+        url: source.url,
+        hasUrl: !!source.url
+      });
+    });
+    console.log('🔍 === SOURCE EXTRACTION DEBUG END ===');
+    
     return sources;
   } catch (error) {
-    console.error('Error extracting sources:', error);
+    console.error('❌ Error extracting sources:', error);
     return [];
   }
 }, []);
