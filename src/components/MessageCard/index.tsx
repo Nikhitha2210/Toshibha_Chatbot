@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -7,10 +7,8 @@ import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import FeedbackModal from '../Feedback/Feedback';
 import SourceModal from '../Source';
 import { useThemeContext } from '../../context/ThemeContext';
-import { SourceReference, useChat } from '../../context/ChatContext';
+import { useChat } from '../../context/ChatContext';
 import SourcePills from '../SourcePills/SourcePills';
-
-
 
 interface HighlightData {
     title: string;
@@ -19,12 +17,12 @@ interface HighlightData {
     description: string;
 }
 
-// export interface SourceReference {
-//     filename: string;
-//     pages: string;
-//     awsLink: string;
-//     url?: string;
-// }
+export interface SourceReference {
+    filename: string;
+    pages: string;
+    awsLink: string;
+    url?: string;
+}
 
 interface MessageCardProps {
     time: string;
@@ -58,6 +56,48 @@ const TypingDots = () => {
     );
 };
 
+// ✅ Simple Message Renderer - Just displays text with better formatting
+const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
+    // Check if this looks like table data
+    const hasTableStructure = text.includes('|') && 
+                              text.includes('Part Number') && 
+                              text.includes('Description') &&
+                              text.includes('---|');
+
+    if (hasTableStructure) {
+        // Format table-like text with better spacing and highlighting
+        return (
+            <View style={{
+                backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
+                padding: 12,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme === 'dark' ? '#333' : '#ddd',
+            }}>
+                <Text style={{
+                    color: theme === 'dark' ? '#ccc' : '#333',
+                    fontSize: 12,
+                    lineHeight: 18,
+                    fontFamily: 'monospace', // Monospace font for better table alignment
+                }}>
+                    {text}
+                </Text>
+            </View>
+        );
+    }
+
+    // Regular text formatting
+    return (
+        <Text style={{
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 20,
+        }}>
+            {text}
+        </Text>
+    );
+};
+
 const MessageCard: React.FC<MessageCardProps> = ({
     time,
     message,
@@ -69,9 +109,10 @@ const MessageCard: React.FC<MessageCardProps> = ({
     hasVoted = false,
     voteType
 }) => {
-        useEffect(() => {
+    useEffect(() => {
         console.log('🔍 === MESSAGECARD DEBUG ===');
         console.log('📨 Message received:', message.substring(0, 100) + '...');
+        console.log('📨 Is streaming:', isStreaming);
         console.log('📋 Sources array:', sources);
         console.log('📋 Sources length:', sources?.length || 0);
         
@@ -89,7 +130,8 @@ const MessageCard: React.FC<MessageCardProps> = ({
             console.log('❌ No sources found in MessageCard');
         }
         console.log('🔍 === MESSAGECARD DEBUG END ===');
-    }, [sources, message]);
+    }, [sources, message, isStreaming]);
+
     const [feedbackVisible, setFeedbackVisible] = useState(false);
     const [sourceVisible, setSourceVisible] = useState(false);
     const [activeTab, setActiveTab] = useState<'Links' | 'Images'>('Links');
@@ -221,32 +263,37 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
+            {/* ✅ Simple message rendering that doesn't break content */}
             {isStreaming && !message ? (
                 <View style={{ paddingVertical: 6 }}>
                     <TypingDots />
                 </View>
             ) : (
-                <>
-                    <Text style={[
-                        styles.messageText,
-                        isErrorMessage && {
-                            color: '#f44336',
-                            backgroundColor: '#ffebee',
-                            padding: 10,
-                            borderRadius: 6,
-                            fontFamily: 'monospace',
-                            fontSize: 13
-                        }
-                    ]}>
-                        {message}
-                        {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
-                    </Text>
-
-                    {/* Add Source Pills here */}
-                    {!isUser && sources && sources.length > 0 && (
-                        <SourcePills sources={sources} theme={theme} />
+                <View style={{ marginBottom: 10 }}>
+                    {isErrorMessage ? (
+                        <Text style={[
+                            styles.messageText,
+                            {
+                                color: '#f44336',
+                                backgroundColor: '#ffebee',
+                                padding: 10,
+                                borderRadius: 6,
+                                fontFamily: 'monospace',
+                                fontSize: 13
+                            }
+                        ]}>
+                            {message}
+                            {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
+                        </Text>
+                    ) : (
+                        <MessageRenderer text={message} theme={theme} />
                     )}
-                </>
+                </View>
+            )}
+
+            {/* ✅ Source pills display */}
+            {sources && sources.length > 0 && (
+                <SourcePills sources={sources} theme={theme} />
             )}
 
             {isErrorMessage && (
