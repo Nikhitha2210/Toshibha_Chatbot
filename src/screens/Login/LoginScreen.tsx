@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, Alert, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import styles from './LoginScreen.styles';
@@ -22,6 +22,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // ✅ NEW: Password visibility toggle
   const [deviceInfo, setDeviceInfo] = useState({
     isSamsung: false,
     isNothing: false,
@@ -30,6 +31,16 @@ const LoginScreen = () => {
 
   const navigation = useNavigation<NavigationProp>();
   const { login, state, clearError } = useAuth();
+
+  // ✅ FIXED: Prevent back navigation to login when authenticated
+  useFocusEffect(
+    React.useCallback(() => {
+      if (state.isAuthenticated) {
+        console.log('✅ User is authenticated, redirecting to Home');
+        navigation.replace('Home'); // Use replace instead of navigate to prevent back navigation
+      }
+    }, [state.isAuthenticated, navigation])
+  );
 
   useEffect(() => {
     const detectDevice = async () => {
@@ -68,7 +79,8 @@ const LoginScreen = () => {
 
     try {
       await login(email.trim(), password);
-      navigation.navigate('Home');
+      // ✅ FIXED: Use replace instead of navigate to prevent back navigation
+      navigation.replace('Home');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       let displayMessage = '';
@@ -126,6 +138,8 @@ const LoginScreen = () => {
               setEmailError={setEmailError}
               passwordError={passwordError}
               setPasswordError={setPasswordError}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
               handleSignIn={handleSignIn}
               handleGoogleSignIn={handleGoogleSignIn}
               state={state}
@@ -156,6 +170,8 @@ const LoginScreen = () => {
             setEmailError={setEmailError}
             passwordError={passwordError}
             setPasswordError={setPasswordError}
+            showPassword={showPassword}
+            setShowPassword={setShowPassword}
             handleSignIn={handleSignIn}
             handleGoogleSignIn={handleGoogleSignIn}
             state={state}
@@ -170,7 +186,8 @@ const LoginScreen = () => {
 // Shared login content component
 const LoginContent = ({ 
   email, setEmail, password, setPassword, emailError, setEmailError, 
-  passwordError, setPasswordError, handleSignIn, handleGoogleSignIn, state, clearError 
+  passwordError, setPasswordError, showPassword, setShowPassword, 
+  handleSignIn, handleGoogleSignIn, state, clearError 
 }: any) => (
   <>
     <View style={styles.wrapper}>
@@ -202,13 +219,14 @@ const LoginContent = ({
           />
         </View>
 
+        {/* ✅ FIXED: Password field with toggle visibility */}
         <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>
           <IconAssets.Lock style={styles.inputIcon} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { flex: 1 }]} // ✅ Make input flexible for eye icon
             placeholder="Password"
             placeholderTextColor={Colors.dark.subText}
-            secureTextEntry
+            secureTextEntry={!showPassword} // ✅ Toggle based on showPassword state
             autoCapitalize="none"
             autoCorrect={false}
             value={password}
@@ -219,6 +237,22 @@ const LoginContent = ({
             }}
             onSubmitEditing={handleSignIn}
           />
+          {/* ✅ NEW: Eye icon to toggle password visibility */}
+          <TouchableOpacity 
+            onPress={() => setShowPassword(!showPassword)}
+            style={{ 
+              padding: 8,
+              marginLeft: 8,
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={{ 
+              fontSize: 18, 
+              color: Colors.dark.subText,
+            }}>
+              {showPassword ? '👁️' : '👁️‍🗨️'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {state.error && (
@@ -241,20 +275,20 @@ const LoginContent = ({
           )}
         </TouchableOpacity>
 
-        <View style={styles.dividerWrapper}>
+        {/* <View style={styles.dividerWrapper}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>or</Text>
           <View style={styles.dividerLine} />
-        </View>
+        </View> */}
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.googleButton}
           onPress={handleGoogleSignIn}
           disabled={state.isLoading}
         >
           <Image source={GoogleLogo} style={styles.googleIcon} />
           <Text style={styles.googleButtonText}>Sign in with Google</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     </View>
 

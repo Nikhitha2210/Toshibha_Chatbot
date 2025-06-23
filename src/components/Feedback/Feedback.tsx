@@ -27,13 +27,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     const [feedbackText, setFeedbackText] = useState('');
     const [isVoiceActive, setIsVoiceActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // ✅ NEW: Local voice text management for feedback modal
+    const [localVoiceText, setLocalVoiceText] = useState('');
 
     const { 
         startListening, 
         stopListening, 
         isListening, 
-        setInputText: setVoiceInputText, 
-        inputText: voiceInputText,
+        inputText: voiceInputText, // This comes from the voice hook
         clearText
     } = useVoiceInput();
     
@@ -54,28 +55,40 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     }, [harmful, untrue, unhelpful, isVoiceActive]);
 
     useEffect(() => {
-        if (isVoiceActive && voiceInputText) {
+        // ✅ FIXED: Update feedback text when voice input changes (during listening)
+        if (isVoiceActive && isListening && voiceInputText) {
             setFeedbackText(voiceInputText);
         }
-    }, [voiceInputText, isVoiceActive]);
+    }, [voiceInputText, isVoiceActive, isListening]);
 
-    const handleVoiceToggle = async () => {
+    // ✅ FIXED: Better voice toggle with text preservation
+    const handleFeedbackVoiceToggle = async () => {
         if (isListening) {
+            console.log('🎤 Stopping voice, preserving text:', voiceInputText);
             await stopListening();
             setIsVoiceActive(false);
+            
+            // ✅ CRITICAL: Preserve the voice text when stopping
+            if (voiceInputText && voiceInputText.trim()) {
+                console.log('🎤 Preserving voice text:', voiceInputText);
+                setLocalVoiceText(voiceInputText);
+                setFeedbackText(voiceInputText);
+            } else if (localVoiceText) {
+                // Fallback to local voice text if available
+                console.log('🎤 Using local voice text:', localVoiceText);
+                setFeedbackText(localVoiceText);
+            }
         } else {
-            // Set the current feedback text to voice input before starting
-            setVoiceInputText(feedbackText);
+            console.log('🎤 Starting voice with current text:', feedbackText);
             setIsVoiceActive(true);
             await startListening();
         }
     };
 
     const handleTextChange = (text: string) => {
+        console.log('📝 Text changed to:', text);
         setFeedbackText(text);
-        if (isVoiceActive) {
-            setVoiceInputText(text);
-        }
+        setLocalVoiceText(text);
     };
 
     const handleSubmit = async () => {
@@ -103,11 +116,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     };
 
     const handleClose = () => {
+        console.log('🔴 Closing feedback modal');
         if (isVoiceActive && isListening) {
             stopListening();
         }
         setIsVoiceActive(false);
         setFeedbackText('');
+        setLocalVoiceText(''); // ✅ Clear local voice text too
+        clearText(); // Clear voice input text
         setHarmful(false);
         setUntrue(false);
         setUnhelpful(false);
@@ -120,43 +136,109 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                 <View style={styles.feedbackModal}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={styles.feedbackTitle}>Provide feedback</Text>
-                        <TouchableOpacity 
-                            onPressIn={async () => {
-                                if (!isListening) {
-                                    setVoiceInputText(feedbackText);
-                                    setIsVoiceActive(true);
-                                    await startListening();
-                                }
-                            }}
-                            onPressOut={async () => {
-                                if (isListening) {
-                                    await stopListening();
-                                    setIsVoiceActive(false);
-                                }
-                            }}
-                            style={{ 
-                                padding: 8,
-                                borderRadius: 20,
-                                backgroundColor: isListening ? '#FF681F' : 'transparent',
-                                minWidth: 40,
-                                minHeight: 40,
-                                justifyContent: 'center',
-                                alignItems: 'center'
-                            }} 
-                            disabled={isSubmitting}
-                        >
-                            {isListening ? (
-                                <ListeningDots />
-                            ) : (
-                                <IconAssets.Microphone />
+                        
+                        {/* ✅ FIXED: Voice input controls with same pattern as PromptInput */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {/* ✅ Clear Button - appears when there's text and not listening */}
+                            {feedbackText.length > 0 && !isListening && (
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        setFeedbackText('');
+                                        clearText();
+                                    }} 
+                                    disabled={isSubmitting}
+                                    style={{
+                                        width: 25,
+                                        height: 25,
+                                        borderRadius: 12.5,
+                                        backgroundColor: '#666',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        marginRight: 5,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: 'bold' }}>×</Text>
+                                </TouchableOpacity>
                             )}
-                        </TouchableOpacity>
+
+                            {/* ✅ Show Done button when listening */}
+                            {isListening && (
+                                <TouchableOpacity 
+                                    onPress={handleFeedbackVoiceToggle} 
+                                    style={{
+                                        backgroundColor: '#22C55E', // Green checkmark
+                                        borderRadius: 20,
+                                        padding: 8,
+                                        minWidth: 40,
+                                        minHeight: 40,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}
+                                    disabled={isSubmitting}
+                                >
+                                    <Text style={{ fontSize: 16, color: '#fff', fontWeight: 'bold' }}>✓</Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* ✅ Show microphone when not listening */}
+                            {!isListening && (
+                                <TouchableOpacity 
+                                    onPress={handleFeedbackVoiceToggle}
+                                    style={{ 
+                                        padding: 8,
+                                        borderRadius: 20,
+                                        backgroundColor: 'transparent',
+                                        minWidth: 40,
+                                        minHeight: 40,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        borderWidth: 1,
+                                        borderColor: '#666'
+                                    }} 
+                                    disabled={isSubmitting}
+                                >
+                                    <IconAssets.Microphone width={20} height={20} />
+                                </TouchableOpacity>
+                            )}
+
+                            {/* ✅ Show animated dots when listening */}
+                            {isListening && (
+                                <View style={{
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    minWidth: 30,
+                                }}>
+                                    <ListeningDots />
+                                </View>
+                            )}
+                        </View>
                     </View>
+
+                    {/* ✅ FIXED: Voice status indicator */}
+                    {isListening && (
+                        <View style={{
+                            backgroundColor: 'rgba(255, 104, 31, 0.95)',
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 15,
+                            marginBottom: 10,
+                            alignSelf: 'center',
+                        }}>
+                            <Text style={{ 
+                                fontSize: 12, 
+                                color: '#fff',
+                                fontWeight: '600',
+                                textAlign: 'center'
+                            }}>
+                                🎤 Listening... Tap ✓ when done speaking
+                            </Text>
+                        </View>
+                    )}
 
                     <TextInput
                         style={[
                             styles.feedbackInput,
-                            isVoiceActive && { borderColor: '#FF681F', borderWidth: 2 }
+                            isListening && { borderColor: '#FF681F', borderWidth: 2 }
                         ]}
                         placeholder="What was the issue with the response? How could it be improved?"
                         placeholderTextColor="#aaa"
@@ -165,12 +247,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         onChangeText={handleTextChange}
                         editable={!isListening && !isSubmitting}
                     />
-
-                    {isListening && (
-                        <Text style={{ color: '#FF681F', fontSize: 12, marginBottom: 10 }}>
-                            🎤 Hold to talk, release when done
-                        </Text>
-                    )}
 
                     <View style={styles.checkboxRow}>
                         <CheckBox

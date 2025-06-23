@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Clipboard } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { getStyles } from './styles';
@@ -56,13 +56,22 @@ const TypingDots = () => {
     );
 };
 
-// ✅ Simple Message Renderer - Just displays text with better formatting
+// ✅ Enhanced Message Renderer with Working Text Selection
 const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
     // Check if this looks like table data
     const hasTableStructure = text.includes('|') && 
-                              text.includes('Part Number') && 
-                              text.includes('Description') &&
-                              text.includes('---|');
+                              (text.includes('Part Number') || 
+                               text.includes('Description') ||
+                               text.includes('Price') ||
+                               text.includes('Model') ||
+                               text.includes('---|')) &&
+                              text.split('\n').length > 2;
+
+    // ✅ Manual copy function for better text selection
+    const handleCopyPress = () => {
+        Clipboard.setString(text);
+        Alert.alert('Copied', 'Text copied to clipboard!');
+    };
 
     if (hasTableStructure) {
         // Format table-like text with better spacing and highlighting
@@ -73,28 +82,117 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: theme === 'dark' ? '#333' : '#ddd',
+                marginVertical: 8,
             }}>
-                <Text style={{
-                    color: theme === 'dark' ? '#ccc' : '#333',
-                    fontSize: 12,
-                    lineHeight: 18,
-                    fontFamily: 'monospace', // Monospace font for better table alignment
-                }}>
+                <Text 
+                    selectable={true} // ✅ Enable text selection
+                    textBreakStrategy="balanced"
+                    style={{
+                        color: theme === 'dark' ? '#ccc' : '#333',
+                        fontSize: 12,
+                        lineHeight: 18,
+                        fontFamily: 'monospace', // Monospace font for better table alignment
+                    }}
+                >
                     {text}
                 </Text>
+                <TouchableOpacity 
+                    onPress={handleCopyPress}
+                    style={{
+                        marginTop: 8,
+                        alignSelf: 'flex-end',
+                        backgroundColor: theme === 'dark' ? '#333' : '#ddd',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 4,
+                    }}
+                >
+                    <Text style={{ 
+                        fontSize: 10, 
+                        color: theme === 'dark' ? '#fff' : '#000' 
+                    }}>
+                        Copy Table
+                    </Text>
+                </TouchableOpacity>
             </View>
         );
     }
 
-    // Regular text formatting
+    // Check if this is a bulleted list
+    const isList = (text.includes('•') || (text.includes('-') && text.split('\n').length > 2)) && 
+                   !text.includes('|');
+    
+    if (isList) {
+        return (
+            <View style={{
+                paddingLeft: 8,
+            }}>
+                <Text 
+                    selectable={true} // ✅ Enable text selection
+                    textBreakStrategy="balanced"
+                    style={{
+                        color: theme === 'dark' ? '#ccc' : '#333',
+                        fontSize: 14,
+                        lineHeight: 22,
+                    }}
+                >
+                    {text}
+                </Text>
+                <TouchableOpacity 
+                    onPress={handleCopyPress}
+                    style={{
+                        marginTop: 8,
+                        alignSelf: 'flex-end',
+                        backgroundColor: theme === 'dark' ? '#333' : '#ddd',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 4,
+                    }}
+                >
+                    <Text style={{ 
+                        fontSize: 10, 
+                        color: theme === 'dark' ? '#fff' : '#000' 
+                    }}>
+                        Copy List
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // Regular text formatting with improved readability
     return (
-        <Text style={{
-            color: theme === 'dark' ? '#ccc' : '#333',
-            fontSize: 14,
-            lineHeight: 20,
-        }}>
-            {text}
-        </Text>
+        <View>
+            <Text 
+                selectable={true} // ✅ Enable text selection for all text
+                textBreakStrategy="balanced"
+                style={{
+                    color: theme === 'dark' ? '#ccc' : '#333',
+                    fontSize: 14,
+                    lineHeight: 20,
+                }}
+            >
+                {text}
+            </Text>
+            <TouchableOpacity 
+                onPress={handleCopyPress}
+                style={{
+                    marginTop: 8,
+                    alignSelf: 'flex-end',
+                    backgroundColor: theme === 'dark' ? '#333' : '#ddd',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                }}
+            >
+                <Text style={{ 
+                    fontSize: 10, 
+                    color: theme === 'dark' ? '#fff' : '#000' 
+                }}>
+                    Copy Text
+                </Text>
+            </TouchableOpacity>
+        </View>
     );
 };
 
@@ -181,6 +279,12 @@ const MessageCard: React.FC<MessageCardProps> = ({
         }
     };
 
+    // ✅ Copy function for user messages
+    const handleCopyUserMessage = () => {
+        Clipboard.setString(message);
+        Alert.alert('Copied', 'Message copied to clipboard!');
+    };
+
     const sourceLinks = sources.map((source, index) => ({
         id: index + 1,
         label: `Source ${index + 1}`,
@@ -193,16 +297,30 @@ const MessageCard: React.FC<MessageCardProps> = ({
     if (isUser) {
         return (
             <View style={{ alignItems: 'flex-end', marginBottom: 20, paddingHorizontal: 10 }}>
-                <Text style={{ color: '#666', fontSize: 12, marginBottom: 5 }}>{time}</Text>
-                <View style={{
-                    backgroundColor: '#FF6A00',
-                    borderRadius: 15,
-                    borderBottomRightRadius: 5,
-                    padding: 12,
-                    maxWidth: '80%',
-                }}>
-                    <Text style={{ color: '#fff', fontSize: 14 }}>{message}</Text>
-                </View>
+                <Text 
+                    selectable={true} // ✅ Enable text selection
+                    style={{ color: '#666', fontSize: 12, marginBottom: 5 }}
+                >
+                    {time}
+                </Text>
+                <TouchableOpacity 
+                    onLongPress={handleCopyUserMessage}
+                    style={{
+                        backgroundColor: '#FF6A00',
+                        borderRadius: 15,
+                        borderBottomRightRadius: 5,
+                        padding: 12,
+                        maxWidth: '80%',
+                    }}
+                >
+                    <Text 
+                        selectable={true} // ✅ Enable text selection for user messages
+                        textBreakStrategy="balanced"
+                        style={{ color: '#fff', fontSize: 14 }}
+                    >
+                        {message}
+                    </Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -213,7 +331,12 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 <View style={styles.iconContainer}>
                     <IconAssets.Frame />
                 </View>
-                <Text style={styles.timeText}>{time}</Text>
+                <Text 
+                    selectable={true} // ✅ Enable text selection
+                    style={styles.timeText}
+                >
+                    {time}
+                </Text>
 
                 {error && (
                     <TouchableOpacity
@@ -234,7 +357,10 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     borderLeftWidth: 4,
                     borderLeftColor: '#f44336'
                 }}>
-                    <Text style={{ color: '#c62828', fontSize: 14 }}>
+                    <Text 
+                        selectable={true} // ✅ Enable text selection for error messages
+                        style={{ color: '#c62828', fontSize: 14 }}
+                    >
                         ⚠️ {error}
                     </Text>
                     <TouchableOpacity onPress={clearError} style={{ marginTop: 5 }}>
@@ -252,18 +378,21 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     borderLeftWidth: 3,
                     borderLeftColor: '#FF6A00'
                 }}>
-                    <Text style={[styles.messageText, {
-                        fontStyle: 'italic',
-                        color: '#FF6A00',
-                        fontSize: 13
-                    }]}>
+                    <Text 
+                        selectable={true} // ✅ Enable text selection for agent status
+                        style={[styles.messageText, {
+                            fontStyle: 'italic',
+                            color: '#FF6A00',
+                            fontSize: 13
+                        }]}
+                    >
                         {agentStatus}
                         {isStreaming && <Text style={{ color: '#FF6A00' }}>...</Text>}
                     </Text>
                 </View>
             )}
 
-            {/* ✅ Simple message rendering that doesn't break content */}
+            {/* ✅ Enhanced message rendering with text selection enabled */}
             {isStreaming && !message ? (
                 <View style={{ paddingVertical: 6 }}>
                     <TypingDots />
@@ -271,17 +400,21 @@ const MessageCard: React.FC<MessageCardProps> = ({
             ) : (
                 <View style={{ marginBottom: 10 }}>
                     {isErrorMessage ? (
-                        <Text style={[
-                            styles.messageText,
-                            {
-                                color: '#f44336',
-                                backgroundColor: '#ffebee',
-                                padding: 10,
-                                borderRadius: 6,
-                                fontFamily: 'monospace',
-                                fontSize: 13
-                            }
-                        ]}>
+                        <Text 
+                            selectable={true} // ✅ Enable text selection for error messages
+                            textBreakStrategy="balanced"
+                            style={[
+                                styles.messageText,
+                                {
+                                    color: '#f44336',
+                                    backgroundColor: '#ffebee',
+                                    padding: 10,
+                                    borderRadius: 6,
+                                    fontFamily: 'monospace',
+                                    fontSize: 13
+                                }
+                            ]}
+                        >
                             {message}
                             {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
                         </Text>

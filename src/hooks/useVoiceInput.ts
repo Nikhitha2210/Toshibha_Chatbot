@@ -39,7 +39,7 @@ export const useVoiceInput = () => {
     };
   }, []);
 
-  // ✅ CRITICAL: Safe state updates only when mounted - FIXED TYPESCRIPT
+  // ✅ CRITICAL: Safe state updates only when mounted
   const safeSetState = useCallback((stateSetter: () => void) => {
     if (isComponentMountedRef.current) {
       try {
@@ -50,7 +50,7 @@ export const useVoiceInput = () => {
     }
   }, []);
 
-  // ✅ Voice event handlers - FIXED TYPESCRIPT
+  // ✅ Voice event handlers
   const onSpeechStart = useCallback(() => {
     console.log('🎤 Voice started recording');
     safeSetState(() => {
@@ -63,59 +63,129 @@ export const useVoiceInput = () => {
     console.log('🎤 Final voice result:', recognizedText);
     
     if (recognizedText && recognizedText.trim() && isComponentMountedRef.current) {
-      currentSessionTextRef.current = recognizedText;
-      
-      // Combine base text + current session text
-      const finalText = baseTextRef.current 
-        ? `${baseTextRef.current} ${recognizedText}`.trim()
+      // ✅ FIXED: Accumulate text instead of replacing
+      const existingSessionText = currentSessionTextRef.current;
+      const newSessionText = existingSessionText 
+        ? `${existingSessionText} ${recognizedText}`.trim()
         : recognizedText;
+      
+      currentSessionTextRef.current = newSessionText;
+      
+      // Combine base text + accumulated session text
+      const finalText = baseTextRef.current 
+        ? `${baseTextRef.current} ${newSessionText}`.trim()
+        : newSessionText;
       
       safeSetState(() => {
         setInputText(finalText);
         setVoiceInputText(finalText);
       });
+      
+      console.log('🎤 Accumulated text:', newSessionText);
     }
+    
+    // ✅ FIXED: Don't auto-stop here, let user click tick button
+    console.log('🎤 Got final results but continuing to listen for more speech...');
   }, [safeSetState]);
 
   const onSpeechPartialResults = useCallback((event: SpeechResultsEvent) => {
     const partialText = event.value?.[0] || '';
     
     if (partialText && partialText.trim() && isComponentMountedRef.current) {
-      currentSessionTextRef.current = partialText;
+      // ✅ FIXED: Show accumulated text + current partial text
+      const existingSessionText = currentSessionTextRef.current;
+      const tempSessionText = existingSessionText 
+        ? `${existingSessionText} ${partialText}`.trim()
+        : partialText;
       
       // Show partial results in real-time
       const tempText = baseTextRef.current 
-        ? `${baseTextRef.current} ${partialText}`.trim()
-        : partialText;
+        ? `${baseTextRef.current} ${tempSessionText}`.trim()
+        : tempSessionText;
       
       safeSetState(() => {
         setInputText(tempText);
         setVoiceInputText(tempText);
       });
+      
+      console.log('🎤 Showing partial:', tempSessionText);
     }
   }, [safeSetState]);
 
   const onSpeechEnd = useCallback(() => {
-    console.log('🎤 Voice stopped recording');
-    safeSetState(() => {
-      setIsListening(false);
-      isRecordingRef.current = false;
-    });
+    console.log('🎤 Speech engine ended - but we will restart it to keep listening');
+    
+    // ✅ FIXED: Restart the voice recognition to keep listening
+    // Only stop if user manually stopped (not due to silence)
+    if (isRecordingRef.current && isComponentMountedRef.current) {
+      // Restart voice recognition after a brief pause
+      setTimeout(async () => {
+        if (isRecordingRef.current && isComponentMountedRef.current) {
+          try {
+            console.log('🎤 Restarting voice recognition to continue listening...');
+            console.log('🎤 Preserved session text:', currentSessionTextRef.current);
+            
+            await Voice.start('en-US', {
+              EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+              EXTRA_PARTIAL_RESULTS: true,
+              EXTRA_MAX_RESULTS: 1,
+            });
+          } catch (error) {
+            console.log('❌ Error restarting voice:', error);
+            // If restart fails, stop listening
+            safeSetState(() => {
+              setIsListening(false);
+              isRecordingRef.current = false;
+            });
+          }
+        }
+      }, 100);
+    } else {
+      // User manually stopped, so update state
+      safeSetState(() => {
+        setIsListening(false);
+        isRecordingRef.current = false;
+      });
+    }
   }, [safeSetState]);
 
   const onSpeechError = useCallback((event: SpeechErrorEvent) => {
     const errorCode = event.error?.code || 'unknown';
-    console.log('❌ Voice error (handled):', errorCode);
+    console.log('❌ Voice error:', errorCode);
     
+    // ✅ FIXED: Only stop on real errors, not silence/no-match
+    if (errorCode === '7' || errorCode === '8' || errorCode === '9') {
+      // These are "no speech", "audio recording error", "insufficient permissions"
+      // For no speech (7), we want to keep listening, not stop
+      if (errorCode === '7' && isRecordingRef.current && isComponentMountedRef.current) {
+        console.log('🎤 No speech detected, but continuing to listen...');
+        // Restart to keep listening
+        setTimeout(async () => {
+          if (isRecordingRef.current && isComponentMountedRef.current) {
+            try {
+              await Voice.start('en-US', {
+                EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+                EXTRA_PARTIAL_RESULTS: true,
+                EXTRA_MAX_RESULTS: 1,
+              });
+            } catch (error) {
+              console.log('❌ Error restarting after no speech:', error);
+              safeSetState(() => {
+                setIsListening(false);
+                isRecordingRef.current = false;
+              });
+            }
+          }
+        }, 100);
+        return;
+      }
+    }
+    
+    // For other errors, stop listening
     safeSetState(() => {
       setIsListening(false);
       isRecordingRef.current = false;
     });
-    
-    // Only show alerts for critical errors, not common ones
-    if (errorCode !== '8' && errorCode !== '9' && errorCode !== '7') {
-      // Don't show error for permission denied, network errors, etc.
-    }
   }, [safeSetState]);
 
   // ✅ CRITICAL: Setup voice listeners safely
@@ -166,7 +236,7 @@ export const useVoiceInput = () => {
     return true; // iOS permissions handled automatically
   }, []);
 
-  // ✅ PERFECT: Start voice recording (onPressIn)
+  // ✅ Start voice recording - Manual start only
   const startListening = useCallback(async (): Promise<void> => {
     // Prevent multiple starts
     if (isRecordingRef.current || isListening || !isComponentMountedRef.current) {
@@ -174,7 +244,7 @@ export const useVoiceInput = () => {
       return;
     }
 
-    console.log('🎤 Starting voice recording...');
+    console.log('🎤 Starting voice recording (manual stop only)...');
 
     const hasPermission = await checkPermissions();
     if (!hasPermission) {
@@ -199,14 +269,15 @@ export const useVoiceInput = () => {
       // Mark as recording BEFORE starting
       isRecordingRef.current = true;
       
-      // Start voice recognition
+      // ✅ FIXED: Start voice recognition with settings that don't auto-stop
       await Voice.start('en-US', {
         EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
         EXTRA_PARTIAL_RESULTS: true,
         EXTRA_MAX_RESULTS: 1,
+        // Remove auto-stop settings
       });
       
-      console.log('✅ Voice recording started successfully');
+      console.log('✅ Voice recording started (will only stop when user clicks tick)');
       
     } catch (error) {
       console.log('❌ Voice start error:', error);
@@ -221,14 +292,17 @@ export const useVoiceInput = () => {
     }
   }, [checkPermissions, setupVoiceListeners, inputText, safeSetState, isListening]);
 
-  // ✅ PERFECT: Stop voice recording (onPressOut)
+  // ✅ Stop voice recording - Manual stop only
   const stopListening = useCallback(async (): Promise<void> => {
     if (!isRecordingRef.current || !isComponentMountedRef.current) {
       console.log('⚠️ Voice not active or component unmounted');
       return;
     }
 
-    console.log('🎤 Stopping voice recording...');
+    console.log('🎤 Stopping voice recording (manual stop)...');
+
+    // ✅ FIXED: Mark as not recording FIRST to prevent restart
+    isRecordingRef.current = false;
 
     try {
       // Stop voice recognition
@@ -249,7 +323,6 @@ export const useVoiceInput = () => {
           setInputText(finalText);
           setVoiceInputText(finalText);
           setIsListening(false);
-          isRecordingRef.current = false;
         });
       }
       
@@ -262,7 +335,6 @@ export const useVoiceInput = () => {
       if (isComponentMountedRef.current) {
         safeSetState(() => {
           setIsListening(false);
-          isRecordingRef.current = false;
         });
       }
     }
@@ -280,7 +352,7 @@ export const useVoiceInput = () => {
     }
   }, [safeSetState]);
 
-  // ✅ Manual text update (for typing) - FIXED TYPESCRIPT
+  // ✅ Manual text update (for typing)
   const updateInputText = useCallback((text: string) => {
     if (isComponentMountedRef.current) {
       setInputText(text);
@@ -291,7 +363,7 @@ export const useVoiceInput = () => {
     }
   }, []);
 
-  // ✅ Toggle function (for backward compatibility)
+  // ✅ Toggle function
   const handleVoiceToggle = useCallback(async (): Promise<void> => {
     if (isListening) {
       await stopListening();

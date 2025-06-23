@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, TextInput, TouchableOpacity, View, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -51,6 +51,9 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
     const { inputText: promptInputText, setInputText: setPromptInputText } = usePrompt();
 
     const inputRef = useRef<TextInput>(null);
+    
+    // ✅ NEW: Add state for visual feedback when pressing the button
+    const [isPressed, setIsPressed] = useState(false);
 
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
@@ -107,21 +110,32 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
         setInputText(text);
     };
 
+    // ✅ NEW: ChatGPT-style toggle voice button (click to start/stop)
+    const handleVoiceToggle = async () => {
+        if (isListening) {
+            console.log('🎤 Stopping voice recording (manual stop)');
+            await stopListening();
+        } else {
+            console.log('🎤 Starting voice recording (click to start)');
+            await startListening();
+        }
+    };
+
     console.log("🎤 Voice Status - isListening:", isListening, "inputText length:", inputText.length);
 
     return (
         <View style={styles.askSection}>
-            {/* ✅ KEYBOARD SAFE: Voice status above everything, no layout interference */}
+            {/* ✅ ENHANCED: ChatGPT-style voice status indicator */}
             {isListening && (
                 <View style={{
                     position: 'absolute',
-                    top: -45, // ✅ FIXED: Above input container, no keyboard conflict
+                    top: -45,
                     left: 10,
                     right: 10,
                     alignItems: 'center',
-                    zIndex: 9999, // ✅ FIXED: Highest z-index
-                    pointerEvents: 'none', // ✅ FIXED: No touch blocking
-                    elevation: 10, // ✅ FIXED: Android elevation
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                    elevation: 10,
                 }}>
                     <View style={{
                         backgroundColor: 'rgba(255, 104, 31, 0.95)',
@@ -132,15 +146,15 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                         shadowOffset: { width: 0, height: 2 },
                         shadowOpacity: 0.25,
                         shadowRadius: 4,
-                        elevation: 8, // Android shadow
-                    }}>
+                        elevation: 8,
+                                            }}>
                         <Text style={{ 
                             fontSize: 13, 
                             color: '#fff',
                             fontWeight: '600',
                             textAlign: 'center'
                         }}>
-                            🎤 Hold to talk, release when done
+                            🎤 Listening... Tap ✓ when done speaking
                         </Text>
                     </View>
                 </View>
@@ -162,7 +176,7 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
             </View>
             
             <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center', marginRight: 5 }}>
-                {/* Clear Button - appears when there's text */}
+                {/* Clear Button - appears when there's text and not listening */}
                 {inputText.length > 0 && !isListening && (
                     <TouchableOpacity 
                         onPress={clearText} 
@@ -180,30 +194,62 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     </TouchableOpacity>
                 )}
 
-                {/* ✅ PERFECT: Push-to-Talk Voice Button - NO keyboard interference */}
-                <TouchableOpacity
-                    onPressIn={startListening}  // ✅ Start recording on press down
-                    onPressOut={stopListening}  // ✅ Stop recording on press release
-                    disabled={isLoading}
-                    style={{
-                        backgroundColor: isListening ? '#FF681F' : 'transparent',
-                        borderRadius: 20,
-                        padding: 8,
-                        minWidth: 40,
-                        minHeight: 40,
+                {/* ✅ NEW: Show Done button when listening */}
+                {isListening && (
+                    <TouchableOpacity 
+                        onPress={handleVoiceToggle} 
+                        style={{
+                            backgroundColor: '#22C55E', // Green checkmark
+                            borderRadius: 20,
+                            padding: 8,
+                            minWidth: 40,
+                            minHeight: 40,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 5,
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>✓</Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* ✅ ChatGPT-Style: Click to Start Voice Recording (hidden when listening) */}
+                {!isListening && (
+                    <TouchableOpacity
+                        onPress={handleVoiceToggle}  // ✅ Single tap to start like ChatGPT
+                        disabled={isLoading}
+                        style={{
+                            backgroundColor: 'transparent',
+                            borderRadius: 20,
+                            padding: 8,
+                            minWidth: 40,
+                            minHeight: 40,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: '#666',
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <IconAssets.Microphone 
+                            width={25} 
+                            height={25} 
+                        />
+                    </TouchableOpacity>
+                )}
+
+                {/* Show animated dots when listening */}
+                {isListening && (
+                    <View style={{
                         justifyContent: 'center',
                         alignItems: 'center',
-                        borderWidth: isListening ? 0 : 1,
-                        borderColor: isListening ? 'transparent' : '#666'
-                    }}
-                    activeOpacity={0.8}
-                >
-                    {isListening ? (
+                        minWidth: 40,
+                        minHeight: 40,
+                    }}>
                         <ListeningDots />
-                    ) : (
-                        <IconAssets.Microphone width={25} height={25} />
-                    )}
-                </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* Send Button */}
                 <TouchableOpacity onPress={handleSend} disabled={isLoading || !inputText.trim()}>

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -13,33 +13,53 @@ import SettingsScreen from '../components/Settings/settings';
 const Stack = createNativeStackNavigator();
 
 const Navigation = () => {
-    const navigationRef = useRef<any>(null);
-    const { setNavigationRef } = useAuth();
-
-    // ✅ CRITICAL: Set navigation ref for session management
-    useEffect(() => {
-        if (navigationRef.current) {
-            setNavigationRef(navigationRef.current);
-            console.log('✅ Navigation ref set for session management');
-        }
-    }, [setNavigationRef]);
+    const { state } = useAuth();
 
     return (
-        <NavigationContainer 
-            ref={navigationRef}
-            onReady={() => {
-                // ✅ Ensure navigation ref is set when navigation is ready
-                if (navigationRef.current) {
-                    setNavigationRef(navigationRef.current);
-                    console.log('✅ Navigation ready - ref updated');
-                }
-            }}
-        >
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-                <Stack.Screen name={ROUTE_NAMES.Login} component={LoginScreen} />
-                <Stack.Screen name={ROUTE_NAMES.Home} component={HomeScreen} />
-                <Stack.Screen name={ROUTE_NAMES.AiAssist} component={AiAssistScreen} />
-                <Stack.Screen name={ROUTE_NAMES.Settings} component={SettingsScreen} />
+        <NavigationContainer>
+            <Stack.Navigator 
+                screenOptions={{ 
+                    headerShown: false,
+                    // ✅ FIXED: Prevent gesture-based back navigation on authenticated screens
+                    gestureEnabled: false,
+                }}
+                initialRouteName={state.isAuthenticated ? ROUTE_NAMES.Home : ROUTE_NAMES.Login}
+            >
+                {state.isAuthenticated ? (
+                    // ✅ FIXED: Authenticated user stack - no login screen access
+                    <>
+                        <Stack.Screen 
+                            name={ROUTE_NAMES.Home} 
+                            component={HomeScreen}
+                            options={{
+                                gestureEnabled: false, // Prevent swipe back
+                            }}
+                        />
+                        <Stack.Screen 
+                            name={ROUTE_NAMES.AiAssist} 
+                            component={AiAssistScreen}
+                            options={{
+                                gestureEnabled: true, // Allow swipe back to Home
+                            }}
+                        />
+                        <Stack.Screen 
+                            name={ROUTE_NAMES.Settings} 
+                            component={SettingsScreen}
+                            options={{
+                                gestureEnabled: true, // Allow swipe back to previous screen
+                            }}
+                        />
+                    </>
+                ) : (
+                    // ✅ FIXED: Unauthenticated user stack - only login screen
+                    <Stack.Screen 
+                        name={ROUTE_NAMES.Login} 
+                        component={LoginScreen}
+                        options={{
+                            gestureEnabled: false, // No swipe back from login
+                        }}
+                    />
+                )}
             </Stack.Navigator>
         </NavigationContainer>
     );
