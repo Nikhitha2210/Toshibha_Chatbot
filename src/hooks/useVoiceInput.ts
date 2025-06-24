@@ -8,14 +8,12 @@ export const useVoiceInput = () => {
   const [voiceInputText, setVoiceInputText] = useState<string>('');
   const [shouldFocusPromptInput, setShouldFocusPromptInput] = useState<boolean>(false);
   
-  // ✅ CRITICAL: Refs for safe voice management
   const isRecordingRef = useRef<boolean>(false);
   const isComponentMountedRef = useRef<boolean>(true);
   const listenersSetupRef = useRef<boolean>(false);
   const currentSessionTextRef = useRef<string>(''); // Text from current voice session only
   const baseTextRef = useRef<string>(''); // Text that was already in input before voice session
 
-  // ✅ CRITICAL: Safe cleanup on unmount
   useEffect(() => {
     isComponentMountedRef.current = true;
     
@@ -39,18 +37,15 @@ export const useVoiceInput = () => {
     };
   }, []);
 
-  // ✅ CRITICAL: Safe state updates only when mounted
   const safeSetState = useCallback((stateSetter: () => void) => {
     if (isComponentMountedRef.current) {
       try {
         stateSetter();
       } catch (error) {
-        // Ignore state update errors when component is unmounting
       }
     }
   }, []);
 
-  // ✅ Voice event handlers
   const onSpeechStart = useCallback(() => {
     console.log('🎤 Voice started recording');
     safeSetState(() => {
@@ -63,7 +58,6 @@ export const useVoiceInput = () => {
     console.log('🎤 Final voice result:', recognizedText);
     
     if (recognizedText && recognizedText.trim() && isComponentMountedRef.current) {
-      // ✅ FIXED: Accumulate text instead of replacing
       const existingSessionText = currentSessionTextRef.current;
       const newSessionText = existingSessionText 
         ? `${existingSessionText} ${recognizedText}`.trim()
@@ -84,7 +78,6 @@ export const useVoiceInput = () => {
       console.log('🎤 Accumulated text:', newSessionText);
     }
     
-    // ✅ FIXED: Don't auto-stop here, let user click tick button
     console.log('🎤 Got final results but continuing to listen for more speech...');
   }, [safeSetState]);
 
@@ -92,13 +85,11 @@ export const useVoiceInput = () => {
     const partialText = event.value?.[0] || '';
     
     if (partialText && partialText.trim() && isComponentMountedRef.current) {
-      // ✅ FIXED: Show accumulated text + current partial text
       const existingSessionText = currentSessionTextRef.current;
       const tempSessionText = existingSessionText 
         ? `${existingSessionText} ${partialText}`.trim()
         : partialText;
       
-      // Show partial results in real-time
       const tempText = baseTextRef.current 
         ? `${baseTextRef.current} ${tempSessionText}`.trim()
         : tempSessionText;
@@ -115,10 +106,8 @@ export const useVoiceInput = () => {
   const onSpeechEnd = useCallback(() => {
     console.log('🎤 Speech engine ended - but we will restart it to keep listening');
     
-    // ✅ FIXED: Restart the voice recognition to keep listening
-    // Only stop if user manually stopped (not due to silence)
+
     if (isRecordingRef.current && isComponentMountedRef.current) {
-      // Restart voice recognition after a brief pause
       setTimeout(async () => {
         if (isRecordingRef.current && isComponentMountedRef.current) {
           try {
@@ -132,7 +121,6 @@ export const useVoiceInput = () => {
             });
           } catch (error) {
             console.log('❌ Error restarting voice:', error);
-            // If restart fails, stop listening
             safeSetState(() => {
               setIsListening(false);
               isRecordingRef.current = false;
@@ -141,7 +129,6 @@ export const useVoiceInput = () => {
         }
       }, 100);
     } else {
-      // User manually stopped, so update state
       safeSetState(() => {
         setIsListening(false);
         isRecordingRef.current = false;
@@ -151,14 +138,12 @@ export const useVoiceInput = () => {
 
   const onSpeechError = useCallback((event: SpeechErrorEvent) => {
     const errorCode = event.error?.code || 'unknown';
-    console.log('❌ Voice error:', errorCode);
+    console.log('Voice error:', errorCode);
     
-    // ✅ FIXED: Only stop on real errors, not silence/no-match
     if (errorCode === '7' || errorCode === '8' || errorCode === '9') {
-      // These are "no speech", "audio recording error", "insufficient permissions"
-      // For no speech (7), we want to keep listening, not stop
+
       if (errorCode === '7' && isRecordingRef.current && isComponentMountedRef.current) {
-        console.log('🎤 No speech detected, but continuing to listen...');
+        console.log(' No speech detected, but continuing to listen...');
         // Restart to keep listening
         setTimeout(async () => {
           if (isRecordingRef.current && isComponentMountedRef.current) {
@@ -169,7 +154,7 @@ export const useVoiceInput = () => {
                 EXTRA_MAX_RESULTS: 1,
               });
             } catch (error) {
-              console.log('❌ Error restarting after no speech:', error);
+              console.log('Error restarting after no speech:', error);
               safeSetState(() => {
                 setIsListening(false);
                 isRecordingRef.current = false;
@@ -188,7 +173,6 @@ export const useVoiceInput = () => {
     });
   }, [safeSetState]);
 
-  // ✅ CRITICAL: Setup voice listeners safely
   const setupVoiceListeners = useCallback(() => {
     if (listenersSetupRef.current || !isComponentMountedRef.current) {
       return;
@@ -208,14 +192,13 @@ export const useVoiceInput = () => {
       Voice.onSpeechRecognized = () => {};
       
       listenersSetupRef.current = true;
-      console.log('✅ Voice listeners setup successfully');
+      console.log('Voice listeners setup successfully');
     } catch (error) {
-      console.log('❌ Voice listener setup error:', error);
+      console.log('Voice listener setup error:', error);
       listenersSetupRef.current = false;
     }
   }, [onSpeechStart, onSpeechResults, onSpeechPartialResults, onSpeechEnd, onSpeechError]);
 
-  // ✅ Check microphone permissions
   const checkPermissions = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       try {
@@ -236,7 +219,6 @@ export const useVoiceInput = () => {
     return true; // iOS permissions handled automatically
   }, []);
 
-  // ✅ Start voice recording - Manual start only
   const startListening = useCallback(async (): Promise<void> => {
     // Prevent multiple starts
     if (isRecordingRef.current || isListening || !isComponentMountedRef.current) {
@@ -269,7 +251,6 @@ export const useVoiceInput = () => {
       // Mark as recording BEFORE starting
       isRecordingRef.current = true;
       
-      // ✅ FIXED: Start voice recognition with settings that don't auto-stop
       await Voice.start('en-US', {
         EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
         EXTRA_PARTIAL_RESULTS: true,
@@ -277,10 +258,10 @@ export const useVoiceInput = () => {
         // Remove auto-stop settings
       });
       
-      console.log('✅ Voice recording started (will only stop when user clicks tick)');
+      console.log('Voice recording started (will only stop when user clicks tick)');
       
     } catch (error) {
-      console.log('❌ Voice start error:', error);
+      console.log('Voice start error:', error);
       
       // Reset state on error
       safeSetState(() => {
@@ -299,7 +280,7 @@ export const useVoiceInput = () => {
       return;
     }
 
-    console.log('🎤 Stopping voice recording (manual stop)...');
+    console.log('Stopping voice recording (manual stop)...');
 
     // ✅ FIXED: Mark as not recording FIRST to prevent restart
     isRecordingRef.current = false;
@@ -326,10 +307,10 @@ export const useVoiceInput = () => {
         });
       }
       
-      console.log('✅ Voice recording stopped successfully');
+      console.log('Voice recording stopped successfully');
       
     } catch (error) {
-      console.log('⚠️ Voice stop error (handled):', error);
+      console.log('Voice stop error (handled):', error);
       
       // Always reset state even on error
       if (isComponentMountedRef.current) {
@@ -340,7 +321,6 @@ export const useVoiceInput = () => {
     }
   }, [safeSetState, inputText]);
 
-  // ✅ Clear all text
   const clearText = useCallback((): void => {
     if (isComponentMountedRef.current) {
       safeSetState(() => {
@@ -352,7 +332,6 @@ export const useVoiceInput = () => {
     }
   }, [safeSetState]);
 
-  // ✅ Manual text update (for typing)
   const updateInputText = useCallback((text: string) => {
     if (isComponentMountedRef.current) {
       setInputText(text);
@@ -363,7 +342,6 @@ export const useVoiceInput = () => {
     }
   }, []);
 
-  // ✅ Toggle function
   const handleVoiceToggle = useCallback(async (): Promise<void> => {
     if (isListening) {
       await stopListening();

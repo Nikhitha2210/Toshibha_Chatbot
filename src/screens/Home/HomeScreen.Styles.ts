@@ -32,27 +32,23 @@ export const getStyles = (theme: 'light' | 'dark') => {
             marginBottom: 30
         },
         
-        // ✅ FIXED CONTENT CONTAINER - proper spacing, no ScrollView conflicts
         contentContainer: {
             flex: 1,
             paddingHorizontal: 20,
             marginBottom: 120, // Space for fixed input at bottom
         },
         
-        // ✅ PROMPT CARDS - clickable, no zIndex conflicts
         promptCardsContainer: {
             alignItems: 'center',
             marginBottom: 20,
         },
         
-        // ✅ RECENT QUERIES - clickable, proper container  
         recentQueriesContainer: {
             flex: 1,
             minHeight: 250,
             maxHeight: SCREEN_HEIGHT * 0.5,
         },
         
-        // ✅ FIXED INPUT WRAPPER - no touch blocking
         inputWrapper: {
             position: 'absolute',
             bottom: 0,

@@ -22,7 +22,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // ✅ NEW: Password visibility toggle
+  const [showPassword, setShowPassword] = useState(false); 
   const [deviceInfo, setDeviceInfo] = useState({
     isSamsung: false,
     isNothing: false,
@@ -32,12 +32,11 @@ const LoginScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const { login, state, clearError } = useAuth();
 
-  // ✅ FIXED: Prevent back navigation to login when authenticated
   useFocusEffect(
     React.useCallback(() => {
       if (state.isAuthenticated) {
-        console.log('✅ User is authenticated, redirecting to Home');
-        navigation.replace('Home'); // Use replace instead of navigate to prevent back navigation
+        console.log('User is authenticated, redirecting to Home');
+        navigation.replace('Home'); 
       }
     }, [state.isAuthenticated, navigation])
   );
@@ -46,7 +45,7 @@ const LoginScreen = () => {
     const detectDevice = async () => {
       const info = await getDeviceInfo();
       setDeviceInfo(info);
-      console.log('🔍 Device detected:', info);
+      console.log(' Device detected:', info);
     };
     detectDevice();
   }, []);
@@ -79,7 +78,6 @@ const LoginScreen = () => {
 
     try {
       await login(email.trim(), password);
-      // ✅ FIXED: Use replace instead of navigate to prevent back navigation
       navigation.replace('Home');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
@@ -114,7 +112,6 @@ const LoginScreen = () => {
     );
   };
 
-  // Samsung devices need KeyboardAvoidingView, Nothing phones work better without
   if (deviceInfo.isSamsung) {
     return (
       <KeyboardAvoidingView 
@@ -151,7 +148,6 @@ const LoginScreen = () => {
     );
   }
 
-  // Nothing Phone and other devices - original working approach
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
@@ -183,7 +179,6 @@ const LoginScreen = () => {
   );
 };
 
-// Shared login content component
 const LoginContent = ({ 
   email, setEmail, password, setPassword, emailError, setEmailError, 
   passwordError, setPasswordError, showPassword, setShowPassword, 
@@ -219,14 +214,13 @@ const LoginContent = ({
           />
         </View>
 
-        {/* ✅ FIXED: Password field with toggle visibility */}
         <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>
           <IconAssets.Lock style={styles.inputIcon} />
           <TextInput
-            style={[styles.input, { flex: 1 }]} // ✅ Make input flexible for eye icon
+            style={[styles.input, { flex: 1 }]} 
             placeholder="Password"
             placeholderTextColor={Colors.dark.subText}
-            secureTextEntry={!showPassword} // ✅ Toggle based on showPassword state
+            secureTextEntry={!showPassword} 
             autoCapitalize="none"
             autoCorrect={false}
             value={password}
@@ -237,7 +231,6 @@ const LoginContent = ({
             }}
             onSubmitEditing={handleSignIn}
           />
-          {/* ✅ NEW: Eye icon to toggle password visibility */}
           <TouchableOpacity 
             onPress={() => setShowPassword(!showPassword)}
             style={{ 

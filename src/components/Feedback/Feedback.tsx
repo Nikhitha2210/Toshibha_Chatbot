@@ -27,7 +27,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     const [feedbackText, setFeedbackText] = useState('');
     const [isVoiceActive, setIsVoiceActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    // ✅ NEW: Local voice text management for feedback modal
+    //  NEW: Local voice text management for feedback modal
     const [localVoiceText, setLocalVoiceText] = useState('');
 
     const { 
@@ -55,38 +55,34 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     }, [harmful, untrue, unhelpful, isVoiceActive]);
 
     useEffect(() => {
-        // ✅ FIXED: Update feedback text when voice input changes (during listening)
         if (isVoiceActive && isListening && voiceInputText) {
             setFeedbackText(voiceInputText);
         }
     }, [voiceInputText, isVoiceActive, isListening]);
 
-    // ✅ FIXED: Better voice toggle with text preservation
     const handleFeedbackVoiceToggle = async () => {
         if (isListening) {
             console.log('🎤 Stopping voice, preserving text:', voiceInputText);
             await stopListening();
             setIsVoiceActive(false);
             
-            // ✅ CRITICAL: Preserve the voice text when stopping
             if (voiceInputText && voiceInputText.trim()) {
-                console.log('🎤 Preserving voice text:', voiceInputText);
+                console.log(' Preserving voice text:', voiceInputText);
                 setLocalVoiceText(voiceInputText);
                 setFeedbackText(voiceInputText);
             } else if (localVoiceText) {
-                // Fallback to local voice text if available
-                console.log('🎤 Using local voice text:', localVoiceText);
+                console.log(' Using local voice text:', localVoiceText);
                 setFeedbackText(localVoiceText);
             }
         } else {
-            console.log('🎤 Starting voice with current text:', feedbackText);
+            console.log(' Starting voice with current text:', feedbackText);
             setIsVoiceActive(true);
             await startListening();
         }
     };
 
     const handleTextChange = (text: string) => {
-        console.log('📝 Text changed to:', text);
+        console.log(' Text changed to:', text);
         setFeedbackText(text);
         setLocalVoiceText(text);
     };
@@ -107,7 +103,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                 Alert.alert('Success', 'Feedback submitted successfully!');
             }
         } catch (error) {
-            console.error('❌ Feedback submission failed:', error);
+            console.error(' Feedback submission failed:', error);
             Alert.alert('Error', 'Feedback submission failed. Please try again.');
         } finally {
             setIsSubmitting(false);
@@ -116,13 +112,13 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
     };
 
     const handleClose = () => {
-        console.log('🔴 Closing feedback modal');
+        console.log(' Closing feedback modal');
         if (isVoiceActive && isListening) {
             stopListening();
         }
         setIsVoiceActive(false);
         setFeedbackText('');
-        setLocalVoiceText(''); // ✅ Clear local voice text too
+        setLocalVoiceText(''); //  Clear local voice text too
         clearText(); // Clear voice input text
         setHarmful(false);
         setUntrue(false);
@@ -137,9 +133,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={styles.feedbackTitle}>Provide feedback</Text>
                         
-                        {/* ✅ FIXED: Voice input controls with same pattern as PromptInput */}
+                        {/* FIXED: Voice input controls with same pattern as PromptInput */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            {/* ✅ Clear Button - appears when there's text and not listening */}
+                            {/*  Clear Button - appears when there's text and not listening */}
                             {feedbackText.length > 0 && !isListening && (
                                 <TouchableOpacity 
                                     onPress={() => {
@@ -161,7 +157,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                                 </TouchableOpacity>
                             )}
 
-                            {/* ✅ Show Done button when listening */}
                             {isListening && (
                                 <TouchableOpacity 
                                     onPress={handleFeedbackVoiceToggle} 
@@ -180,7 +175,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                                 </TouchableOpacity>
                             )}
 
-                            {/* ✅ Show microphone when not listening */}
                             {!isListening && (
                                 <TouchableOpacity 
                                     onPress={handleFeedbackVoiceToggle}
@@ -201,7 +195,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                                 </TouchableOpacity>
                             )}
 
-                            {/* ✅ Show animated dots when listening */}
                             {isListening && (
                                 <View style={{
                                     justifyContent: 'center',
@@ -214,7 +207,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                         </View>
                     </View>
 
-                    {/* ✅ FIXED: Voice status indicator */}
                     {isListening && (
                         <View style={{
                             backgroundColor: 'rgba(255, 104, 31, 0.95)',

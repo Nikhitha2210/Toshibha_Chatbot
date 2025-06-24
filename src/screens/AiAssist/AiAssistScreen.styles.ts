@@ -34,19 +34,16 @@ export const getStyles = (theme: 'light' | 'dark') => {
             backgroundColor: 'transparent',
         },
         
-        // ✅ FIXED MESSAGES CONTAINER - proper flex structure
         messagesContainer: {
             flex: 1, // Takes remaining space
             marginBottom: 120, // Space for absolute positioned input
         },
         
-        // ✅ FIXED SCROLLVIEW - full height within container
         scrollView: {
             flex: 1,
             backgroundColor: 'transparent',
         },
         
-        // ✅ FIXED SCROLL CONTENT - proper padding for input space
         scrollContent: {
             padding: 20,
             paddingBottom: 60, // Extra space for last message above input
@@ -67,7 +64,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
             fontStyle: 'italic',
         },
         
-        // ✅ FIXED INPUT WRAPPER - absolute positioning keeps it at bottom
         inputWrapper: {
             position: 'absolute',
             bottom: 0,

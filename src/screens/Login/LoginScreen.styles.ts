@@ -16,26 +16,26 @@ const styles = StyleSheet.create({
     wrapper: {
         flex: 1,
         justifyContent: 'center',
-        paddingTop: 60, // Add top padding to avoid logo overlap
+        paddingTop: 60, 
     },
     logoWrapper: {
         position: 'absolute',
-        top: 50, // Moved down to avoid status bar
-        right: 20, // More margin from edge
-        zIndex: 1, // Ensure it's above content but not overlapping
+        top: 50, 
+        right: 20,
+        zIndex: 1, 
     },
     logo: {
-        height: 40, // Slightly smaller
-        width: 96, // Proportionally smaller
+        height: 40, 
+        width: 96, 
     },
     mainWrapper: {
         justifyContent: 'center',
         paddingHorizontal: 0,
-        marginTop: 20, // Add margin to push content below logo
+        marginTop: 20, 
     },
     centreText: {
         marginBottom: 60,
-        paddingTop: 20, // Extra padding to ensure no overlap
+        paddingTop: 20, 
     },
     title: {
         color: Colors.dark.text,

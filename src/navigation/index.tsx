@@ -20,13 +20,11 @@ const Navigation = () => {
             <Stack.Navigator 
                 screenOptions={{ 
                     headerShown: false,
-                    // ✅ FIXED: Prevent gesture-based back navigation on authenticated screens
                     gestureEnabled: false,
                 }}
                 initialRouteName={state.isAuthenticated ? ROUTE_NAMES.Home : ROUTE_NAMES.Login}
             >
                 {state.isAuthenticated ? (
-                    // ✅ FIXED: Authenticated user stack - no login screen access
                     <>
                         <Stack.Screen 
                             name={ROUTE_NAMES.Home} 
@@ -51,7 +49,6 @@ const Navigation = () => {
                         />
                     </>
                 ) : (
-                    // ✅ FIXED: Unauthenticated user stack - only login screen
                     <Stack.Screen 
                         name={ROUTE_NAMES.Login} 
                         component={LoginScreen}

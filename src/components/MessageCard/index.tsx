@@ -56,16 +56,13 @@ const TypingDots = () => {
     );
 };
 
-// ✅ Enhanced Message Renderer with Smart Formatting - ONLY CHANGE
 const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
     
-    // ✅ Auto-format text into structured content
     const formatText = (rawText: string) => {
         if (!rawText || rawText.trim().length === 0) return [];
 
         let formattedText = rawText.trim();
         
-        // ✅ 1. Split into sections based on common patterns
         const sections = [];
         
         // Check for numbered lists (1. 2. 3.)
@@ -96,7 +93,7 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
         else if (formattedText.includes('|') && formattedText.split('\n').filter(line => line.includes('|')).length >= 2) {
             sections.push({ type: 'table', content: formattedText });
         }
-        // ✅ 2. Smart paragraph splitting for regular text
+        //  2. Smart paragraph splitting for regular text
         else {
             // Split by double line breaks first
             let paragraphs = formattedText.split(/\n\s*\n/);
@@ -107,7 +104,7 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
                 paragraphs = paragraphs.map((p, i) => i < paragraphs.length - 1 ? p + '.' : p);
             }
             
-            // ✅ 3. Further split long paragraphs (over 200 characters)
+            //  3. Further split long paragraphs (over 200 characters)
             const finalParagraphs: string[] = [];
             paragraphs.forEach(paragraph => {
                 const trimmed = paragraph.trim();
@@ -240,7 +237,7 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
                 </View>
             ))}
             
-            {/* ✅ Copy button for the entire formatted text */}
+            {/* Copy button for the entire formatted text */}
             <TouchableOpacity 
                 onPress={handleCopyPress}
                 style={{
@@ -301,9 +298,9 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 });
             });
         } else {
-            console.log('❌ No sources found in MessageCard');
+            console.log(' No sources found in MessageCard');
         }
-        console.log('🔍 === MESSAGECARD DEBUG END ===');
+        console.log(' === MESSAGECARD DEBUG END ===');
     }, [sources, message, isStreaming]);
 
     const [feedbackVisible, setFeedbackVisible] = useState(false);
@@ -355,7 +352,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
         }
     };
 
-    // ✅ Copy function for user messages
+    //  Copy function for user messages
     const handleCopyUserMessage = () => {
         Clipboard.setString(message);
         Alert.alert('Copied', 'Message copied to clipboard!');
@@ -468,7 +465,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* ✅ ONLY CHANGE: Enhanced message rendering with smart formatting */}
+            {/*  ONLY CHANGE: Enhanced message rendering with smart formatting */}
             {isStreaming && !message ? (
                 <View style={{ paddingVertical: 6 }}>
                     <TypingDots />
@@ -500,7 +497,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* ✅ Source pills display */}
+            {/* Source pills display */}
             {sources && sources.length > 0 && (
                 <SourcePills sources={sources} theme={theme} />
             )}

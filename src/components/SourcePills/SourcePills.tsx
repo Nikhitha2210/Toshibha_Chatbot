@@ -36,13 +36,13 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   }
 
   const handlePillPress = (source: SourceReference, sourceIndex: number) => {
-    console.log('🔍 === PILL PRESS DEBUG ===');
-    console.log('🖼️ Pill pressed for source:', source);
-    console.log('🖼️ Source URL:', source.url);
-    console.log('🖼️ AWS Link:', source.awsLink);
+    console.log(' === PILL PRESS DEBUG ===');
+    console.log(' Pill pressed for source:', source);
+    console.log(' Source URL:', source.url);
+    console.log(' AWS Link:', source.awsLink);
     
     if (source.url) {
-      console.log('✅ URL exists, opening modal...');
+      console.log(' URL exists, opening modal...');
       setSelectedSource(source);
       // Find the index among sources that have URLs
       const sourcesWithUrls = sources.filter(s => s.url);
@@ -50,14 +50,14 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
       setSelectedImageIndex(Math.max(0, imageIndex));
       setImageModalVisible(true);
     } else {
-      console.log('❌ No URL available for source');
+      console.log(' No URL available for source');
       Alert.alert(
         'No Image Available',
         'This source does not have an associated image to display.',
         [{ text: 'OK' }]
       );
     }
-    console.log('🔍 === PILL PRESS DEBUG END ===');
+    console.log(' === PILL PRESS DEBUG END ===');
   };
 
   const closeImageModal = () => {
@@ -75,7 +75,6 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     }
   };
 
-  // ✅ Prepare images for the zoom viewer
   const imageUrls = sources
     .filter(source => source.url)
     .map(source => ({
@@ -93,7 +92,6 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
 
   return (
     <>
-      {/* ✅ Horizontal scrollable source pills */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
