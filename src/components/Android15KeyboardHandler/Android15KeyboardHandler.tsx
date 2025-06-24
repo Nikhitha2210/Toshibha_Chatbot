@@ -1,67 +1,121 @@
-// Create: src/components/Android15KeyboardHandler/Android15KeyboardHandler.tsx
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Keyboard, Animated, Platform } from 'react-native';
-import { isAndroid15OrNewer } from '../../utils/androidUtils';
+// src/components/Android15KeyboardHandler.tsx
 
-interface Props {
-  children: React.ReactNode;
-  inputHeight?: number;
+import React, { useEffect, useState, ReactNode } from 'react';
+import { 
+  Keyboard, 
+  Dimensions, 
+  Platform, 
+  StatusBar,
+  View,
+  ViewStyle,
+  KeyboardEvent
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// ✅ FIXED: Add proper TypeScript interfaces
+interface Android15KeyboardHandlerProps {
+  children: ReactNode;
 }
 
-const Android15KeyboardHandler: React.FC<Props> = ({ children, inputHeight = 100 }) => {
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const animatedValue = useRef(new Animated.Value(0)).current;
+interface Android15InputWrapperProps {
+  children: ReactNode;
+  style?: ViewStyle;
+}
+
+export const Android15KeyboardHandler: React.FC<Android15KeyboardHandlerProps> = ({ children }) => {
+  const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
+  const [screenHeight, setScreenHeight] = useState<number>(Dimensions.get('window').height);
+  const insets = useSafeAreaInsets();
+  
+  // ✅ FIXED: Remove DeviceInfo import, use Platform.Version directly
+  const isAndroid15 = Platform.OS === 'android' && Platform.Version >= 35;
 
   useEffect(() => {
-    // Only apply special handling for Android 15+
-    if (!isAndroid15OrNewer()) {
-      return; // Use default behavior for older Android
-    }
+    if (!isAndroid15) return;
 
-    console.log('🤖 Android 15+ detected - applying enhanced keyboard handling');
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e: KeyboardEvent) => {
+      console.log('🎹 Android 15 Keyboard shown:', e.endCoordinates.height);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
 
-    const keyboardDidShow = (e: any) => {
-      const height = e.endCoordinates.height;
-      setKeyboardHeight(height);
-      
-      // Android 15 specific: Move content up more to account for new keyboard behavior
-      const adjustedHeight = height + 20; // Extra padding for Android 15
-      
-      Animated.timing(animatedValue, {
-        toValue: adjustedHeight,
-        duration: 200, // Android 15 has faster animations
-        useNativeDriver: false,
-      }).start();
-    };
-
-    const keyboardDidHide = () => {
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      console.log('🎹 Android 15 Keyboard hidden');
       setKeyboardHeight(0);
-      
-      Animated.timing(animatedValue, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: false,
-      }).start();
-    };
+    });
 
-    const showListener = Keyboard.addListener('keyboardDidShow', keyboardDidShow);
-    const hideListener = Keyboard.addListener('keyboardDidHide', keyboardDidHide);
+    const dimensionListener = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenHeight(window.height);
+    });
 
     return () => {
-      showListener.remove();
-      hideListener.remove();
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+      dimensionListener?.remove();
     };
-  }, [animatedValue]);
+  }, [isAndroid15]);
 
-  // For Android 15+, wrap content in animated view
-  if (isAndroid15OrNewer()) {
-    return (
-      <Animated.View style={{ 
-        flex: 1,
-        marginBottom: animatedValue 
-      }}>
-        {children}
-      </Animated.View>
-    );
-}
-}
+  if (!isAndroid15) {
+    // For non-Android 15 devices, render children normally
+    return <>{children}</>;
+  }
+
+  // Android 15 specific keyboard handling
+  const adjustedHeight = screenHeight - keyboardHeight - (StatusBar.currentHeight || 0) - insets.bottom;
+
+  return (
+    <View style={{ 
+      flex: 1, 
+      height: keyboardHeight > 0 ? adjustedHeight : undefined,
+      paddingTop: insets.top,
+      paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom 
+    }}>
+      {children}
+    </View>
+  );
+};
+
+// Enhanced PromptInput wrapper for Android 15
+export const Android15InputWrapper: React.FC<Android15InputWrapperProps> = ({ children, style }) => {
+  const [keyboardVisible, setKeyboardVisible] = useState<boolean>(false);
+  const insets = useSafeAreaInsets();
+  
+  // ✅ FIXED: Use Platform.Version directly instead of DeviceInfo
+  const isAndroid15 = Platform.OS === 'android' && Platform.Version >= 35;
+
+  useEffect(() => {
+    if (!isAndroid15) return;
+
+    const showListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+
+    const hideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      showListener?.remove();
+      hideListener?.remove();
+    };
+  }, [isAndroid15]);
+
+  if (!isAndroid15) {
+    return <View style={style}>{children}</View>;
+  }
+
+  return (
+    <View style={[
+      style,
+      keyboardVisible && {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        elevation: 1000,
+      }
+    ]}>
+      {children}
+    </View>
+  );
+};

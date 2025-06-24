@@ -56,140 +56,216 @@ const TypingDots = () => {
     );
 };
 
-// ✅ Enhanced Message Renderer with Working Text Selection
+// ✅ Enhanced Message Renderer with Smart Formatting - ONLY CHANGE
 const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
-    // Check if this looks like table data
-    const hasTableStructure = text.includes('|') && 
-                              (text.includes('Part Number') || 
-                               text.includes('Description') ||
-                               text.includes('Price') ||
-                               text.includes('Model') ||
-                               text.includes('---|')) &&
-                              text.split('\n').length > 2;
+    
+    // ✅ Auto-format text into structured content
+    const formatText = (rawText: string) => {
+        if (!rawText || rawText.trim().length === 0) return [];
 
-    // ✅ Manual copy function for better text selection
+        let formattedText = rawText.trim();
+        
+        // ✅ 1. Split into sections based on common patterns
+        const sections = [];
+        
+        // Check for numbered lists (1. 2. 3.)
+        if (formattedText.match(/^\d+\.\s/m)) {
+            const numberedParts = formattedText.split(/(?=^\d+\.\s)/m);
+            numberedParts.forEach((part, index) => {
+                if (part.trim()) {
+                    sections.push({
+                        type: index === 0 && !part.match(/^\d+\./) ? 'paragraph' : 'numbered',
+                        content: part.trim()
+                    });
+                }
+            });
+        }
+        // Check for bullet points (• - *)
+        else if (formattedText.match(/^[\•\-\*]\s/m)) {
+            const bulletParts = formattedText.split(/(?=^[\•\-\*]\s)/m);
+            bulletParts.forEach((part, index) => {
+                if (part.trim()) {
+                    sections.push({
+                        type: index === 0 && !part.match(/^[\•\-\*]/) ? 'paragraph' : 'bullet',
+                        content: part.trim()
+                    });
+                }
+            });
+        }
+        // Check for table structure
+        else if (formattedText.includes('|') && formattedText.split('\n').filter(line => line.includes('|')).length >= 2) {
+            sections.push({ type: 'table', content: formattedText });
+        }
+        // ✅ 2. Smart paragraph splitting for regular text
+        else {
+            // Split by double line breaks first
+            let paragraphs = formattedText.split(/\n\s*\n/);
+            
+            // If no double breaks, try to split by sentences that end with periods followed by new content
+            if (paragraphs.length === 1) {
+                paragraphs = formattedText.split(/\.\s*(?=[A-Z])/);
+                paragraphs = paragraphs.map((p, i) => i < paragraphs.length - 1 ? p + '.' : p);
+            }
+            
+            // ✅ 3. Further split long paragraphs (over 200 characters)
+            const finalParagraphs: string[] = [];
+            paragraphs.forEach(paragraph => {
+                const trimmed = paragraph.trim();
+                if (trimmed.length > 200) {
+                    // Try to split at sentence boundaries
+                    const sentences = trimmed.split(/(?<=\.)\s+/);
+                    let currentGroup = '';
+                    
+                    sentences.forEach(sentence => {
+                        if (currentGroup.length + sentence.length > 200 && currentGroup.length > 0) {
+                            finalParagraphs.push(currentGroup.trim());
+                            currentGroup = sentence;
+                        } else {
+                            currentGroup += (currentGroup ? ' ' : '') + sentence;
+                        }
+                    });
+                    
+                    if (currentGroup.trim()) {
+                        finalParagraphs.push(currentGroup.trim());
+                    }
+                } else if (trimmed) {
+                    finalParagraphs.push(trimmed);
+                }
+            });
+            
+            finalParagraphs.forEach(paragraph => {
+                sections.push({ type: 'paragraph', content: paragraph });
+            });
+        }
+        
+        return sections;
+    };
+
     const handleCopyPress = () => {
         Clipboard.setString(text);
         Alert.alert('Copied', 'Text copied to clipboard!');
     };
 
-    if (hasTableStructure) {
-        // Format table-like text with better spacing and highlighting
-        return (
-            <View style={{
-                backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
-                padding: 12,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme === 'dark' ? '#333' : '#ddd',
-                marginVertical: 8,
-            }}>
-                <Text 
-                    selectable={true} // ✅ Enable text selection
-                    textBreakStrategy="balanced"
-                    style={{
-                        color: theme === 'dark' ? '#ccc' : '#333',
-                        fontSize: 12,
-                        lineHeight: 18,
-                        fontFamily: 'monospace', // Monospace font for better table alignment
-                    }}
-                >
-                    {text}
-                </Text>
-                <TouchableOpacity 
-                    onPress={handleCopyPress}
-                    style={{
-                        marginTop: 8,
-                        alignSelf: 'flex-end',
-                        backgroundColor: theme === 'dark' ? '#333' : '#ddd',
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 4,
-                    }}
-                >
-                    <Text style={{ 
-                        fontSize: 10, 
-                        color: theme === 'dark' ? '#fff' : '#000' 
-                    }}>
-                        Copy Table
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
+    const sections = formatText(text);
 
-    // Check if this is a bulleted list
-    const isList = (text.includes('•') || (text.includes('-') && text.split('\n').length > 2)) && 
-                   !text.includes('|');
-    
-    if (isList) {
-        return (
-            <View style={{
-                paddingLeft: 8,
-            }}>
-                <Text 
-                    selectable={true} // ✅ Enable text selection
-                    textBreakStrategy="balanced"
-                    style={{
-                        color: theme === 'dark' ? '#ccc' : '#333',
-                        fontSize: 14,
-                        lineHeight: 22,
-                    }}
-                >
-                    {text}
-                </Text>
-                <TouchableOpacity 
-                    onPress={handleCopyPress}
-                    style={{
-                        marginTop: 8,
-                        alignSelf: 'flex-end',
-                        backgroundColor: theme === 'dark' ? '#333' : '#ddd',
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 4,
-                    }}
-                >
-                    <Text style={{ 
-                        fontSize: 10, 
-                        color: theme === 'dark' ? '#fff' : '#000' 
-                    }}>
-                        Copy List
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    // Regular text formatting with improved readability
     return (
-        <View>
-            <Text 
-                selectable={true} // ✅ Enable text selection for all text
-                textBreakStrategy="balanced"
-                style={{
-                    color: theme === 'dark' ? '#ccc' : '#333',
-                    fontSize: 14,
-                    lineHeight: 20,
-                }}
-            >
-                {text}
-            </Text>
+        <View style={{ marginVertical: 4 }}>
+            {sections.map((section, index) => (
+                <View key={index} style={{ marginBottom: 12 }}>
+                    {section.type === 'table' && (
+                        <View style={{
+                            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
+                            padding: 12,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: theme === 'dark' ? '#333' : '#ddd',
+                        }}>
+                            <Text 
+                                selectable={true}
+                                style={{
+                                    color: theme === 'dark' ? '#ccc' : '#333',
+                                    fontSize: 12,
+                                    lineHeight: 18,
+                                    fontFamily: 'monospace',
+                                }}
+                            >
+                                {section.content}
+                            </Text>
+                        </View>
+                    )}
+                    
+                    {section.type === 'numbered' && (
+                        <View style={{
+                            backgroundColor: theme === 'dark' ? 'rgba(255, 106, 0, 0.05)' : 'rgba(255, 106, 0, 0.02)',
+                            padding: 10,
+                            borderRadius: 6,
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#FF6A00',
+                            marginVertical: 2,
+                        }}>
+                            <Text 
+                                selectable={true}
+                                style={{
+                                    color: theme === 'dark' ? '#ccc' : '#333',
+                                    fontSize: 14,
+                                    lineHeight: 20,
+                                    fontWeight: '500',
+                                }}
+                            >
+                                {section.content}
+                            </Text>
+                        </View>
+                    )}
+                    
+                    {section.type === 'bullet' && (
+                        <View style={{
+                            backgroundColor: theme === 'dark' ? 'rgba(34, 197, 94, 0.05)' : 'rgba(34, 197, 94, 0.02)',
+                            padding: 10,
+                            borderRadius: 6,
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#22C55E',
+                            marginVertical: 2,
+                        }}>
+                            <Text 
+                                selectable={true}
+                                style={{
+                                    color: theme === 'dark' ? '#ccc' : '#333',
+                                    fontSize: 14,
+                                    lineHeight: 20,
+                                }}
+                            >
+                                {section.content}
+                            </Text>
+                        </View>
+                    )}
+                    
+                    {section.type === 'paragraph' && (
+                        <View style={{
+                            paddingVertical: 2,
+                        }}>
+                            <Text 
+                                selectable={true}
+                                textBreakStrategy="balanced"
+                                style={{
+                                    color: theme === 'dark' ? '#ccc' : '#333',
+                                    fontSize: 14,
+                                    lineHeight: 22,
+                                    textAlign: 'left',
+                                }}
+                            >
+                                {section.content}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            ))}
+            
+            {/* ✅ Copy button for the entire formatted text */}
             <TouchableOpacity 
                 onPress={handleCopyPress}
                 style={{
                     marginTop: 8,
                     alignSelf: 'flex-end',
                     backgroundColor: theme === 'dark' ? '#333' : '#ddd',
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
                 }}
             >
                 <Text style={{ 
-                    fontSize: 10, 
+                    fontSize: 11, 
+                    color: theme === 'dark' ? '#fff' : '#000',
+                    marginRight: 4,
+                }}>
+                    📋
+                </Text>
+                <Text style={{ 
+                    fontSize: 11, 
                     color: theme === 'dark' ? '#fff' : '#000' 
                 }}>
-                    Copy Text
+                    Copy
                 </Text>
             </TouchableOpacity>
         </View>
@@ -298,7 +374,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
         return (
             <View style={{ alignItems: 'flex-end', marginBottom: 20, paddingHorizontal: 10 }}>
                 <Text 
-                    selectable={true} // ✅ Enable text selection
+                    selectable={true}
                     style={{ color: '#666', fontSize: 12, marginBottom: 5 }}
                 >
                     {time}
@@ -314,7 +390,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     }}
                 >
                     <Text 
-                        selectable={true} // ✅ Enable text selection for user messages
+                        selectable={true}
                         textBreakStrategy="balanced"
                         style={{ color: '#fff', fontSize: 14 }}
                     >
@@ -332,7 +408,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     <IconAssets.Frame />
                 </View>
                 <Text 
-                    selectable={true} // ✅ Enable text selection
+                    selectable={true}
                     style={styles.timeText}
                 >
                     {time}
@@ -358,7 +434,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     borderLeftColor: '#f44336'
                 }}>
                     <Text 
-                        selectable={true} // ✅ Enable text selection for error messages
+                        selectable={true}
                         style={{ color: '#c62828', fontSize: 14 }}
                     >
                         ⚠️ {error}
@@ -379,7 +455,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     borderLeftColor: '#FF6A00'
                 }}>
                     <Text 
-                        selectable={true} // ✅ Enable text selection for agent status
+                        selectable={true}
                         style={[styles.messageText, {
                             fontStyle: 'italic',
                             color: '#FF6A00',
@@ -392,7 +468,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* ✅ Enhanced message rendering with text selection enabled */}
+            {/* ✅ ONLY CHANGE: Enhanced message rendering with smart formatting */}
             {isStreaming && !message ? (
                 <View style={{ paddingVertical: 6 }}>
                     <TypingDots />
@@ -401,7 +477,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 <View style={{ marginBottom: 10 }}>
                     {isErrorMessage ? (
                         <Text 
-                            selectable={true} // ✅ Enable text selection for error messages
+                            selectable={true}
                             textBreakStrategy="balanced"
                             style={[
                                 styles.messageText,

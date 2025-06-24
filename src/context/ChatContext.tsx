@@ -1093,15 +1093,16 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
 }, []);
 
     // ✅ CRITICAL: Enhanced sendMessage with crash prevention
- const sendMessage = useCallback(async (text: string) => {
+ // ✅ FIXED: Enhanced sendMessage with proper user message preservation
+const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) {
         console.log('⏭️ Skipping send - empty text or already loading');
         return;
     }
 
     console.log('=== 🚀 STARTING SEND MESSAGE ===');
+    console.log('📝 Original user text:', text); // ✅ DEBUG: Log original text
     
-    // ✅ FIXED: Declare isRequestCancelled at the very beginning
     let isRequestCancelled = false;
     let cleanupFunctions: (() => void)[] = [];
     
@@ -1112,11 +1113,10 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             console.log('🆕 Created new session:', newSessionId);
         }
 
-        // ✅ FIXED: Better session validation
         const isSessionValid = await authContext.validateSessionBeforeRequest();
         if (!isSessionValid) {
             setError('Session expired. Please log in again.');
-            return; // Exit gracefully
+            return;
         }
 
         if (isRequestCancelled) {
@@ -1127,9 +1127,9 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
         setIsLoading(true);
         setError(null);
 
-        await saveRecentQuery(text);
+        // ✅ CRITICAL: Save the EXACT original text as recent query
+        await saveRecentQuery(text.trim()); // Only trim whitespace, don't modify content
 
-        // Generate consistent IDs at the top
         const userMessageId = uuidv4();
         const aiMessageId = uuidv4();
         
@@ -1138,20 +1138,22 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             throw new Error('No authentication token available');
         }
 
+        // ✅ CRITICAL: User message preserves EXACT original text
         const userMessage: ChatMessage = {
             id: userMessageId,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            message: text,
+            message: text, // ✅ NEVER modify the user's original text
             isUser: true,
             sources: [],
             highlight: {
                 title: "Your Query",
                 rating: 0,
                 reviews: 0,
-                description: text
+                description: text // ✅ Keep original for description too
             }
         };
 
+        console.log('👤 Adding user message:', userMessage.message); // ✅ DEBUG: Confirm exact text
         addMessage(userMessage);
 
         const aiMessage: ChatMessage = {
@@ -1172,22 +1174,25 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
 
         addMessage(aiMessage);
 
+        // ✅ CRITICAL: Send original text to API (only trim whitespace)
         const requestBody = {
-            query: text,
+            query: text.trim(), // Only remove leading/trailing whitespace
             qid: aiMessageId,
             uid: getCurrentUserId(),
             sid: currentSessionId || APP_SESSION_ID,
             messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
-                content: msg.message,
+                content: msg.message, // ✅ Use original message content
                 isBot: !msg.isUser
             })),
             collection: 'chatbot'
         };
 
+        console.log('📡 Request body query:', requestBody.query); // ✅ DEBUG: Confirm API gets original text
+
         const chatUrl = getChatApiUrl('/run');
         console.log('📡 Sending chat request to:', chatUrl);
 
-        // ✅ CRITICAL: Improved status polling with cleanup
+        // Status polling setup (unchanged)
         let statusInterval: NodeJS.Timeout | null = null;
         
         const startStatusPolling = () => {
@@ -1246,15 +1251,13 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             }
         };
 
-        // Add cleanup function
         cleanupFunctions.push(stopStatusPolling);
-
         startStatusPolling();
 
-        // ✅ CRITICAL: API call with timeout and abort controller
+        // API call
         const abortController = new AbortController();
         cleanupFunctions.push(() => {
-            isRequestCancelled = true; // Set cancellation flag
+            isRequestCancelled = true;
             abortController.abort();
         });
 
@@ -1286,7 +1289,7 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
         console.log('✅ Chat response received');
 
         const responseText = await response.text();
-        console.log('📝 Full response length:', responseText.length);
+        console.log('📝 AI response length:', responseText.length);
 
         let fullMessage = '';
 
@@ -1298,7 +1301,7 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
                 fullMessage = responseText;
             }
 
-            // ✅ CRITICAL: Controlled streaming with cancellation check
+            // Streaming animation
             const words = fullMessage.split(' ');
             for (let i = 0; i < words.length && !isRequestCancelled; i += 3) {
                 const chunk = words.slice(0, i + 3).join(' ');
@@ -1314,11 +1317,14 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
         stopStatusPolling();
 
         if (!isRequestCancelled) {
+            // ✅ CRITICAL: Only clean the AI response, NOT user messages
             const extractedSources = extractSourcesFromText(fullMessage);
-            const cleanedMessage = cleanMessageText(fullMessage, extractedSources);
+            const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
+            
+            console.log('🤖 Final AI message:', cleanedAIMessage); // ✅ DEBUG: AI message only
             
             updateMessage(aiMessageId, {
-                message: cleanedMessage,
+                message: cleanedAIMessage, // ✅ Only the AI message gets cleaned
                 isStreaming: false,
                 agentStatus: undefined,
                 sources: extractedSources,
@@ -1331,12 +1337,17 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             });
 
             console.log('✅ Message processing completed successfully');
+            
+            // ✅ DEBUG: Log final messages state
+            console.log('📋 Final messages in context:');
+            messages.forEach((msg, index) => {
+                console.log(`Message ${index}: ${msg.isUser ? 'USER' : 'AI'} - "${msg.message}"`);
+            });
         }
 
     } catch (error) {
         console.error('❌ Send message error:', error);
 
-        // Clean up all resources
         cleanupFunctions.forEach(cleanup => {
             try {
                 cleanup();
@@ -1362,7 +1373,6 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             
             setError(errorMessage);
 
-            // Update any streaming AI messages with error
             const streamingAiMessages = messages.filter(msg => !msg.isUser && msg.isStreaming);
             if (streamingAiMessages.length > 0) {
                 updateMessage(streamingAiMessages[0].id, {
@@ -1380,7 +1390,6 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
             }
         }
     } finally {
-        // Always cleanup and stop loading
         cleanupFunctions.forEach(cleanup => {
             try {
                 cleanup();
