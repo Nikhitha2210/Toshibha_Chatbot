@@ -1,6 +1,15 @@
-import { useState } from 'react';
-import { View, Animated, Dimensions, Text, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Animated,
+    Dimensions,
+    Text,
+    SafeAreaView as RN_SafeAreaView,
+    Keyboard,
+    Platform
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getStyles } from './HomeScreen.Styles';
 import Header from '../../components/header';
@@ -15,9 +24,35 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const HomeScreen = () => {
     const [isModalVisible, setModalVisible] = useState(false);
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [androidVersion, setAndroidVersion] = useState(0);
+
+    const insets = useSafeAreaInsets();
+    const EXTRA_BOTTOM_PADDING = 12; // <-- Add this extra value
 
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            setAndroidVersion(parseInt(Platform.Version.toString(), 10));
+        }
+        if (
+            Platform.OS === 'android' &&
+            parseInt(Platform.Version.toString(), 10) >= 35
+        ) {
+            const showListener = Keyboard.addListener('keyboardDidShow', (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
+            });
+            const hideListener = Keyboard.addListener('keyboardDidHide', () => {
+                setKeyboardHeight(0);
+            });
+            return () => {
+                showListener.remove();
+                hideListener.remove();
+            };
+        }
+    }, []);
 
     const openMenu = () => {
         setModalVisible(true);
@@ -45,7 +80,7 @@ const HomeScreen = () => {
         .runOnJS(true);
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
+        <RN_SafeAreaView style={{ flex: 1 }}>
             <View style={styles.container}>
                 <View style={styles.headerContainer}>
                     <Header onMenuPress={openMenu} />
@@ -65,7 +100,13 @@ const HomeScreen = () => {
                     </View>
                 </View>
 
-                <View style={styles.inputWrapper}>
+                {/* Apply keyboard height + safe area insets + extra bottom padding */}
+                <View style={[
+                    styles.inputWrapper,
+                    Platform.OS === 'android' && androidVersion >= 35
+                        ? { paddingBottom: keyboardHeight + insets.bottom + EXTRA_BOTTOM_PADDING }
+                        : { paddingBottom: insets.bottom + EXTRA_BOTTOM_PADDING }
+                ]}>
                     <PromptInput clearOnSend />
                 </View>
 
@@ -79,7 +120,7 @@ const HomeScreen = () => {
                     onClose={closeMenu}
                 />
             </View>
-        </SafeAreaView>
+        </RN_SafeAreaView>
     );
 };
 

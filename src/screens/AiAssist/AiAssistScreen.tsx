@@ -1,24 +1,26 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { 
-    ActivityIndicator, 
-    Animated, 
-    Dimensions, 
-    ScrollView, 
-    Text, 
-    TouchableOpacity, 
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    ScrollView,
+    Text,
+    TouchableOpacity,
     View,
-    SafeAreaView,
+    SafeAreaView as RN_SafeAreaView,
     Platform,
-    BackHandler
-} from 'react-native'
+    BackHandler,
+    Keyboard
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getStyles } from './AiAssistScreen.styles'
-import Header from '../../components/header'
-import PromptInput from '../../components/PromptInput'
-import MessageCard from '../../components/MessageCard'
+import { getStyles } from './AiAssistScreen.styles';
+import Header from '../../components/header';
+import PromptInput from '../../components/PromptInput';
+import MessageCard from '../../components/MessageCard';
 import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import { useChat } from '../../context/ChatContext';
 import Sidebar from '../../components/Sidebar';
@@ -38,17 +40,21 @@ const AiAssistScreen = () => {
     const [isModalVisible, setModalVisible] = useState(false);
     const slideAnim = useState(new Animated.Value(-SCREEN_WIDTH))[0];
     const scrollViewRef = useRef<ScrollView>(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [androidVersion, setAndroidVersion] = useState(0);
+
+    const insets = useSafeAreaInsets();
 
     const navigation = useNavigation<NavigationProp>();
-    const { 
-        messages, 
-        error, 
-        clearError, 
-        startNewSession, 
-        currentSessionId, 
-        getCurrentUserId, 
-        enhancedAutoSave, 
-        hasSessionContent 
+    const {
+        messages,
+        error,
+        clearError,
+        startNewSession,
+        currentSessionId,
+        getCurrentUserId,
+        enhancedAutoSave,
+        hasSessionContent
     } = useChat();
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
@@ -63,16 +69,28 @@ const AiAssistScreen = () => {
         }
     }, [messages]);
 
-    // ✅ CRITICAL: Auto-save session when back button is pressed
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            setAndroidVersion(parseInt(Platform.Version.toString(), 10));
+        }
+        if (Platform.OS === 'android' && parseInt(Platform.Version.toString(), 10) >= 35) {
+            const showListener = Keyboard.addListener('keyboardDidShow', (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
+            });
+            const hideListener = Keyboard.addListener('keyboardDidHide', () => {
+                setKeyboardHeight(0);
+            });
+            return () => {
+                showListener.remove();
+                hideListener.remove();
+            };
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
-                console.log('🔙 Back button pressed on AI Assist screen');
-
-                // ✅ Auto-save current session before going back
                 if (messages.length >= 2 && currentSessionId && hasSessionContent(messages)) {
-                    console.log('💾 Auto-saving session before back navigation...');
-                    
                     const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'Chat Session';
                     const sessionData = {
                         id: currentSessionId,
@@ -83,21 +101,12 @@ const AiAssistScreen = () => {
                         userId: getCurrentUserId(),
                         label: sessionTitle
                     };
-
-                    // Save session synchronously
                     enhancedAutoSave(sessionData);
-                    console.log('✅ Session saved before navigation:', sessionTitle);
-                } else {
-                    console.log('⏭️ No meaningful session to save');
                 }
-
-                // ✅ Allow back navigation to Home screen
                 navigation.navigate('Home');
-                return true; // Prevent default back behavior
+                return true;
             };
-
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
             return () => subscription.remove();
         }, [messages, currentSessionId, getCurrentUserId, enhancedAutoSave, hasSessionContent, navigation])
     );
@@ -119,11 +128,7 @@ const AiAssistScreen = () => {
         }).start(() => setModalVisible(false));
     };
 
-    // ✅ New Chat button behavior (like web app)
     const handleNewChat = () => {
-        console.log('🆕 New Chat clicked - starting new session and going to Home');
-        
-        // Auto-save current session before starting new one
         if (messages.length >= 2 && currentSessionId && hasSessionContent(messages)) {
             const sessionTitle = messages.find(msg => msg.isUser)?.message.slice(0, 50) || 'Chat Session';
             const sessionData = {
@@ -136,9 +141,7 @@ const AiAssistScreen = () => {
                 label: sessionTitle
             };
             enhancedAutoSave(sessionData);
-            console.log('✅ Session saved before new chat:', sessionTitle);
         }
-
         startNewSession();
         navigation.navigate('Home');
     };
@@ -152,14 +155,13 @@ const AiAssistScreen = () => {
         .runOnJS(true);
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
+        <RN_SafeAreaView style={{ flex: 1 }}>
             <View style={styles.container}>
                 <Header onMenuPress={openMenu} />
 
                 <View style={styles.topBar}>
                     <Text style={styles.topBarTitle}>Ask Toshiba</Text>
-                    
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={handleNewChat}
                         style={styles.newChatButton}
                         activeOpacity={0.7}
@@ -229,7 +231,12 @@ const AiAssistScreen = () => {
                     </ScrollView>
                 </View>
 
-                <View style={styles.inputWrapper}>
+                <View style={[
+                    styles.inputWrapper,
+                    Platform.OS === 'android' && androidVersion >= 35
+                        ? { paddingBottom: keyboardHeight + insets.bottom }
+                        : { paddingBottom: insets.bottom }
+                ]}>
                     <View style={styles.inputContainer}>
                         <PromptInput />
                     </View>
@@ -245,8 +252,8 @@ const AiAssistScreen = () => {
                     onClose={closeMenu}
                 />
             </View>
-        </SafeAreaView>
-    )
-}
+        </RN_SafeAreaView>
+    );
+};
 
-export default AiAssistScreen
+export default AiAssistScreen;
