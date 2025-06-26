@@ -275,6 +275,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
 
     const styles = getStyles(theme);
     const ThemedThumbsUpIcon = getThemedIcon('ThumbsUp', theme);
+    const ThemedThumbsDownIcon = getThemedIcon('ThumbsDown', theme); // Add this line
 
     const isErrorMessage = message.toLowerCase().includes('error:') ||
         message.toLowerCase().includes('failed') ||
@@ -525,7 +526,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                             {currentVoteType === 'downvote' ? (
                                 <IconAssets.ThumbsDownBold width={25} height={25} />
                             ) : (
-                                <IconAssets.ThumbsDown width={25} height={25} />
+                                ThemedThumbsDownIcon && <ThemedThumbsDownIcon width={25} height={25} />
                             )}
                         </TouchableOpacity>
                     </View>

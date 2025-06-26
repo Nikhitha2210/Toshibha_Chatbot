@@ -45,7 +45,7 @@ const LoginScreen = () => {
     const detectDevice = async () => {
       const info = await getDeviceInfo();
       setDeviceInfo(info);
-      console.log(' Device detected:', info);
+      console.log('🔍 Device detected:', info);
     };
     detectDevice();
   }, []);
@@ -239,12 +239,7 @@ const LoginContent = ({
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={{ 
-              fontSize: 18, 
-              color: Colors.dark.subText,
-            }}>
-              {showPassword ? '👁️' : '👁️‍🗨️'}
-            </Text>
+            <IconAssets.EyeOff width={20} height={20} />
           </TouchableOpacity>
         </View>
 

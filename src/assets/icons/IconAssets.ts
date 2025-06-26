@@ -14,6 +14,7 @@ import Send from './Send.svg';
 import Arrow from './Arrow.svg';
 import ThumbsUpBold from './thumbs-up-bold.svg';
 import ThumbsDownBold from './thumbs-down-bold.svg';
+import EyeOff from './eye-off.svg';
 
 import NewChatDark from './dark/Newchat.svg';
 import SearchDark from './dark/Search.svg';
@@ -38,6 +39,7 @@ import FilterLight from './light/Filter.svg';
 import LogoLight from './light/Logo.svg';
 import MenuLight from './light/Menu.svg';
 import ThumbsUpLight from './light/thumbs-up.svg';
+import ThumbsDownLight from './light/thumbs-down.svg'; // Add this line
 
 const icons = {
     Logo,
@@ -56,6 +58,7 @@ const icons = {
     Arrow,
     ThumbsUpBold,
     ThumbsDownBold,
+    EyeOff,
 
     // Dark
     NewChatDark,
@@ -82,6 +85,7 @@ const icons = {
     LogoLight,
     MenuLight,
     ThumbsUpLight,
+    ThumbsDownLight, // Add this line
 };
 
 const themedIconMap = {
@@ -128,6 +132,10 @@ const themedIconMap = {
     ThumbsUp: {
         dark: ThumbsUpDark,
         light: ThumbsUpLight,
+    },
+    ThumbsDown: {
+        dark: ThumbsDown,
+        light: ThumbsDownLight, // Uses your new light/thumbs-down.svg
     }
 };
 
