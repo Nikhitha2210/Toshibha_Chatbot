@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Clipboard } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Markdown from 'react-native-markdown-display';
 
 import { getStyles } from './styles';
 import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
@@ -58,186 +59,144 @@ const TypingDots = () => {
 
 const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
     
-    const formatText = (rawText: string) => {
-        if (!rawText || rawText.trim().length === 0) return [];
-
-        let formattedText = rawText.trim();
-        
-        const sections = [];
-        
-        // Check for numbered lists (1. 2. 3.)
-        if (formattedText.match(/^\d+\.\s/m)) {
-            const numberedParts = formattedText.split(/(?=^\d+\.\s)/m);
-            numberedParts.forEach((part, index) => {
-                if (part.trim()) {
-                    sections.push({
-                        type: index === 0 && !part.match(/^\d+\./) ? 'paragraph' : 'numbered',
-                        content: part.trim()
-                    });
-                }
-            });
-        }
-        // Check for bullet points (• - *)
-        else if (formattedText.match(/^[\•\-\*]\s/m)) {
-            const bulletParts = formattedText.split(/(?=^[\•\-\*]\s)/m);
-            bulletParts.forEach((part, index) => {
-                if (part.trim()) {
-                    sections.push({
-                        type: index === 0 && !part.match(/^[\•\-\*]/) ? 'paragraph' : 'bullet',
-                        content: part.trim()
-                    });
-                }
-            });
-        }
-        // Check for table structure
-        else if (formattedText.includes('|') && formattedText.split('\n').filter(line => line.includes('|')).length >= 2) {
-            sections.push({ type: 'table', content: formattedText });
-        }
-        //  2. Smart paragraph splitting for regular text
-        else {
-            // Split by double line breaks first
-            let paragraphs = formattedText.split(/\n\s*\n/);
-            
-            // If no double breaks, try to split by sentences that end with periods followed by new content
-            if (paragraphs.length === 1) {
-                paragraphs = formattedText.split(/\.\s*(?=[A-Z])/);
-                paragraphs = paragraphs.map((p, i) => i < paragraphs.length - 1 ? p + '.' : p);
-            }
-            
-            //  3. Further split long paragraphs (over 200 characters)
-            const finalParagraphs: string[] = [];
-            paragraphs.forEach(paragraph => {
-                const trimmed = paragraph.trim();
-                if (trimmed.length > 200) {
-                    // Try to split at sentence boundaries
-                    const sentences = trimmed.split(/(?<=\.)\s+/);
-                    let currentGroup = '';
-                    
-                    sentences.forEach(sentence => {
-                        if (currentGroup.length + sentence.length > 200 && currentGroup.length > 0) {
-                            finalParagraphs.push(currentGroup.trim());
-                            currentGroup = sentence;
-                        } else {
-                            currentGroup += (currentGroup ? ' ' : '') + sentence;
-                        }
-                    });
-                    
-                    if (currentGroup.trim()) {
-                        finalParagraphs.push(currentGroup.trim());
-                    }
-                } else if (trimmed) {
-                    finalParagraphs.push(trimmed);
-                }
-            });
-            
-            finalParagraphs.forEach(paragraph => {
-                sections.push({ type: 'paragraph', content: paragraph });
-            });
-        }
-        
-        return sections;
-    };
-
     const handleCopyPress = () => {
         Clipboard.setString(text);
         Alert.alert('Copied', 'Text copied to clipboard!');
     };
 
-    const sections = formatText(text);
+    const markdownStyles = {
+        body: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 22,
+        },
+        heading1: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 18,
+            fontWeight: 'bold' as const,
+            marginBottom: 8,
+        },
+        heading2: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 16,
+            fontWeight: 'bold' as const,
+            marginBottom: 6,
+        },
+        heading3: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 14,
+            fontWeight: 'bold' as const,
+            marginBottom: 4,
+        },
+        paragraph: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 22,
+            marginBottom: 8,
+        },
+        list_item: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 20,
+            marginBottom: 4,
+        },
+        bullet_list: {
+            marginBottom: 8,
+        },
+        ordered_list: {
+            marginBottom: 8,
+        },
+        table: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#ddd',
+            borderRadius: 8,
+            marginVertical: 8,
+            overflow: 'hidden' as const,
+        },
+        thead: {
+            backgroundColor: theme === 'dark' ? '#2a2a2a' : '#e9ecef',
+        },
+        th: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 13,
+            fontWeight: 'bold' as const,
+            padding: 12,
+            borderRightWidth: 1,
+            borderRightColor: theme === 'dark' ? '#444' : '#ccc',
+            textAlign: 'left' as const,
+        },
+        tr: {
+            borderBottomWidth: 1,
+            borderBottomColor: theme === 'dark' ? '#333' : '#ddd',
+        },
+        td: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 12,
+            padding: 12,
+            borderRightWidth: 1,
+            borderRightColor: theme === 'dark' ? '#444' : '#ccc',
+            textAlign: 'left' as const,
+        },
+        code_inline: {
+            backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f1f3f4',
+            color: theme === 'dark' ? '#ff6b6b' : '#d73a49',
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+            borderRadius: 3,
+            fontSize: 13,
+            fontFamily: 'monospace',
+        },
+        code_block: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f6f8fa',
+            padding: 12,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            marginVertical: 8,
+        },
+        fence: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f6f8fa',
+            padding: 12,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            marginVertical: 8,
+        },
+        blockquote: {
+            backgroundColor: theme === 'dark' ? 'rgba(255, 106, 0, 0.05)' : 'rgba(255, 106, 0, 0.02)',
+            borderLeftWidth: 4,
+            borderLeftColor: '#FF6A00',
+            paddingLeft: 12,
+            paddingVertical: 8,
+            marginVertical: 8,
+            borderRadius: 4,
+        },
+        strong: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontWeight: 'bold' as const,
+        },
+        em: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontStyle: 'italic' as const,
+        },
+        link: {
+            color: '#FF6A00',
+            textDecorationLine: 'underline' as const,
+        },
+        hr: {
+            backgroundColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            height: 1,
+            marginVertical: 16,
+        },
+    };
 
     return (
         <View style={{ marginVertical: 4 }}>
-            {sections.map((section, index) => (
-                <View key={index} style={{ marginBottom: 12 }}>
-                    {section.type === 'table' && (
-                        <View style={{
-                            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
-                            padding: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: theme === 'dark' ? '#333' : '#ddd',
-                        }}>
-                            <Text 
-                                selectable={true}
-                                style={{
-                                    color: theme === 'dark' ? '#ccc' : '#333',
-                                    fontSize: 12,
-                                    lineHeight: 18,
-                                    fontFamily: 'monospace',
-                                }}
-                            >
-                                {section.content}
-                            </Text>
-                        </View>
-                    )}
-                    
-                    {section.type === 'numbered' && (
-                        <View style={{
-                            backgroundColor: theme === 'dark' ? 'rgba(255, 106, 0, 0.05)' : 'rgba(255, 106, 0, 0.02)',
-                            padding: 10,
-                            borderRadius: 6,
-                            borderLeftWidth: 3,
-                            borderLeftColor: '#FF6A00',
-                            marginVertical: 2,
-                        }}>
-                            <Text 
-                                selectable={true}
-                                style={{
-                                    color: theme === 'dark' ? '#ccc' : '#333',
-                                    fontSize: 14,
-                                    lineHeight: 20,
-                                    fontWeight: '500',
-                                }}
-                            >
-                                {section.content}
-                            </Text>
-                        </View>
-                    )}
-                    
-                    {section.type === 'bullet' && (
-                        <View style={{
-                            backgroundColor: theme === 'dark' ? 'rgba(34, 197, 94, 0.05)' : 'rgba(34, 197, 94, 0.02)',
-                            padding: 10,
-                            borderRadius: 6,
-                            borderLeftWidth: 3,
-                            borderLeftColor: '#22C55E',
-                            marginVertical: 2,
-                        }}>
-                            <Text 
-                                selectable={true}
-                                style={{
-                                    color: theme === 'dark' ? '#ccc' : '#333',
-                                    fontSize: 14,
-                                    lineHeight: 20,
-                                }}
-                            >
-                                {section.content}
-                            </Text>
-                        </View>
-                    )}
-                    
-                    {section.type === 'paragraph' && (
-                        <View style={{
-                            paddingVertical: 2,
-                        }}>
-                            <Text 
-                                selectable={true}
-                                textBreakStrategy="balanced"
-                                style={{
-                                    color: theme === 'dark' ? '#ccc' : '#333',
-                                    fontSize: 14,
-                                    lineHeight: 22,
-                                    textAlign: 'left',
-                                }}
-                            >
-                                {section.content}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-            ))}
+            <Markdown style={markdownStyles}>
+                {text}
+            </Markdown>
             
-            {/* Copy button for the entire formatted text */}
             <TouchableOpacity 
                 onPress={handleCopyPress}
                 style={{
@@ -281,15 +240,13 @@ const MessageCard: React.FC<MessageCardProps> = ({
     voteType
 }) => {
     useEffect(() => {
-        console.log('🔍 === MESSAGECARD DEBUG ===');
-        console.log('📨 Message received:', message.substring(0, 100) + '...');
-        console.log('📨 Is streaming:', isStreaming);
-        console.log('📋 Sources array:', sources);
-        console.log('📋 Sources length:', sources?.length || 0);
+        console.log('MessageCard Debug - Sources:', sources);
+        console.log('MessageCard Debug - Is streaming:', isStreaming);
+        console.log('MessageCard Debug - Message preview:', message.substring(0, 100) + '...');
         
         if (sources && sources.length > 0) {
             sources.forEach((source, index) => {
-                console.log(`🖼️ Source ${index + 1} in MessageCard:`, {
+                console.log(`Source ${index + 1} in MessageCard:`, {
                     filename: source.filename,
                     pages: source.pages,
                     awsLink: source.awsLink,
@@ -297,10 +254,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                     urlExists: !!source.url
                 });
             });
-        } else {
-            console.log(' No sources found in MessageCard');
         }
-        console.log(' === MESSAGECARD DEBUG END ===');
     }, [sources, message, isStreaming]);
 
     const [feedbackVisible, setFeedbackVisible] = useState(false);
@@ -352,7 +306,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
         }
     };
 
-    //  Copy function for user messages
     const handleCopyUserMessage = () => {
         Clipboard.setString(message);
         Alert.alert('Copied', 'Message copied to clipboard!');
@@ -465,7 +418,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/*  ONLY CHANGE: Enhanced message rendering with smart formatting */}
             {isStreaming && !message ? (
                 <View style={{ paddingVertical: 6 }}>
                     <TypingDots />
@@ -497,7 +449,6 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 </View>
             )}
 
-            {/* Source pills display */}
             {sources && sources.length > 0 && (
                 <SourcePills sources={sources} theme={theme} />
             )}

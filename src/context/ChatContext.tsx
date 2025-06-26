@@ -144,9 +144,10 @@ type ChatContextType = {
     cleanupEmptySessions: () => Promise<void>;
     getCurrentUserId: () => string; 
     enhancedAutoSave: (sessionData: ChatSession) => Promise<void>; 
-    hasSessionContent: (sessionMessages: ChatMessage[]) => boolean; 
+    hasSessionContent: (sessionMessages: ChatMessage[]) => boolean;
+    extractSourcesFromText: (text: string) => SourceReference[];
+    cleanMessageText: (text: string, sources: SourceReference[]) => string;
 };
-
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
@@ -445,13 +446,10 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
     const fetchBackendSessions = useCallback(async (): Promise<ChatSession[]> => {
     try {
-        console.log(' Fetching sessions from backend...');
-        
         const token = authContext.state.tokens?.access_token;
-        const userId = getCurrentUserId(); // This will now be email
+        const userId = getCurrentUserId();
 
         if (!token) {
-            console.log(' No token available for session fetch');
             return [];
         }
 
@@ -464,45 +462,52 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         });
 
         if (!response.ok) {
-            console.log(` Session fetch failed: ${response.status}`);
             return [];
         }
 
-        const backendSessions: WebAppSessionObject[] = await response.json(); // ← Add type
-        console.log(` Fetched ${backendSessions.length} sessions from backend for user: ${userId}`);
+        const backendSessions: WebAppSessionObject[] = await response.json();
 
-        const convertedSessions: ChatSession[] = backendSessions.map((session: WebAppSessionObject) => ({ 
+        const convertedSessions: ChatSession[] = backendSessions.map((session: WebAppSessionObject) => ({
             id: session.id,
             title: session.label || `Session ${new Date(session.creationDate).toLocaleDateString()}`,
             timestamp: session.creationDate,
             creationDate: session.creationDate,
-            messages: session.messages.map((msg: WebAppChatMessageObject) => ({ // ← Add type
-                id: msg.id,
-                time: new Date(msg.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: msg.text,
-                isUser: !msg.isBot,
-                sources: (msg as any).sources || [], // ← Cast to any for sources
-                hasVoted: msg.vote !== undefined && msg.vote !== null && msg.vote !== 0,
-                voteType: msg.vote === 1 ? 'upvote' as const : msg.vote === -1 ? 'downvote' as const : undefined,
-                feedback: msg.feedback,
-                highlight: {
-                    title: msg.isBot ? "AI Response" : "Your Query",
-                    rating: msg.isBot ? 4.8 : 0,
-                    reviews: msg.isBot ? 8399 : 0,
-                    description: msg.text || ''
+            messages: session.messages.map((msg: WebAppChatMessageObject) => {
+                let messageText = msg.text;
+                let sources: SourceReference[] = [];
+                
+                if (msg.isBot) {
+                    sources = extractSourcesFromText(messageText);
+                    messageText = cleanMessageText(messageText, sources);
                 }
-            })),
+                
+                return {
+                    id: msg.id,
+                    time: new Date(msg.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    message: messageText,
+                    isUser: !msg.isBot,
+                    sources: sources,
+                    hasVoted: msg.vote !== undefined && msg.vote !== null && msg.vote !== 0,
+                    voteType: msg.vote === 1 ? 'upvote' as const : msg.vote === -1 ? 'downvote' as const : undefined,
+                    feedback: msg.feedback,
+                    highlight: {
+                        title: msg.isBot ? "AI Response" : "Your Query",
+                        rating: msg.isBot ? 4.8 : 0,
+                        reviews: msg.isBot ? 8399 : 0,
+                        description: messageText || ''
+                    }
+                };
+            }),
             userId: userId,
             label: session.label
         }));
 
         return convertedSessions.filter(session => hasSessionContent(session.messages));
     } catch (error) {
-        console.error(' Failed to fetch backend sessions:', error);
+        console.error('Failed to fetch backend sessions:', error);
         return [];
     }
-}, [authContext, getCurrentUserId, hasSessionContent]);
-
+}, [authContext, getCurrentUserId, hasSessionContent]); // REMOVE extractSourcesFromText, cleanMessageText from here
 
     const saveSessionToBackend = useCallback(async (session: ChatSession) => {
         try {
@@ -751,38 +756,37 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }, [getCurrentUserId, hasSessionContent]);
 
     const refreshChatHistory = useCallback(async () => {
-  try {
-    console.log('🔄 Refreshing chat history from backend + local...');
-    setError(null);
+    try {
+        console.log('Refreshing chat history from backend + local...');
+        setError(null);
 
-    const [backendSessions, localSessions] = await Promise.all([
-      fetchBackendSessions(), // Use new function
-      loadUserSessions()
-    ]);
+        const [backendSessions, localSessions] = await Promise.all([
+            fetchBackendSessions(),
+            loadUserSessions()
+        ]);
 
-    const allSessions = [...backendSessions, ...localSessions];
+        const allSessions = [...backendSessions, ...localSessions];
 
-    const uniqueSessions = allSessions.filter((session, index, self) =>
-      index === self.findIndex(s =>
-        s.id === session.id ||
-        (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
-      )
-    );
+        const uniqueSessions = allSessions.filter((session, index, self) =>
+            index === self.findIndex(s =>
+                s.id === session.id ||
+                (s.title === session.title && Math.abs(new Date(s.timestamp).getTime() - new Date(session.timestamp).getTime()) < 60000)
+            )
+        );
 
-    const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
-    validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
+        const validSessions = uniqueSessions.filter(session => hasSessionContent(session.messages));
+        validSessions.sort((a, b) => new Date(b.creationDate || b.timestamp).getTime() - new Date(a.creationDate || a.timestamp).getTime());
 
-    console.log(` Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length})`);
+        console.log(`Total valid sessions: ${validSessions.length} (Backend: ${backendSessions.length}, Local: ${localSessions.length})`);
 
-    setSessions(validSessions);
-    console.log(' Chat history refreshed successfully');
+        setSessions(validSessions);
+        console.log('Chat history refreshed successfully');
 
-  } catch (error) {
-    console.error('Failed to refresh chat history:', error);
-    setError('Failed to refresh chat history');
-  }
-}, [fetchBackendSessions, loadUserSessions, hasSessionContent]);
-
+    } catch (error) {
+        console.error('Failed to refresh chat history:', error);
+        setError('Failed to refresh chat history');
+    }
+}, [fetchBackendSessions, loadUserSessions, hasSessionContent]); // REMOVE extractSourcesFromText, cleanMessageText from here too
 
     const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
         try {
@@ -971,109 +975,135 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }, [loadSession]);
 
 const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
-  try {
-    console.log(' === SOURCE EXTRACTION DEBUG START ===');
-    console.log(' Input text length:', text.length);
-    console.log(' First 500 chars:', text.substring(0, 500));
-    
-    const sources: SourceReference[] = [];
+    try {
+        const sources: SourceReference[] = [];
 
-    const fullSourcePattern = /(.*?)\s+page\s+(\d+)\s+\[aws_id:\s+(.*?)\]/gi;
-    
-    let match;
-
-    console.log(' Searching for source patterns (web app style)...');
-    
-    // Reset regex
-    fullSourcePattern.lastIndex = 0;
-    
-    while ((match = fullSourcePattern.exec(text)) !== null) {
-      const filename = match[1].trim();
-      const pageNum = match[2];
-      const awsLink = match[3].trim();
-      
-      console.log(' Found source pattern:', {
-        filename,
-        pageNum,
-        awsLink,
-        fullMatch: match[0]
-      });
-
-      const imageUrl = getImageUrl(awsLink);
-      console.log('🖼️ Generated image URL:', imageUrl);
-
-      sources.push({
-        filename: filename,
-        pages: pageNum,
-        awsLink: awsLink,
-        url: imageUrl,
-        fullMatchText: match[0]
-      });
-    }
-
-    const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/gi;
-    awsIdPattern.lastIndex = 0;
-    
-    while ((match = awsIdPattern.exec(text)) !== null) {
-      const awsLink = match[1].trim();
-      
-      const existingSource = sources.find(s => s.awsLink === awsLink);
-      if (!existingSource) {
-        console.log('🆕 Found standalone aws_id:', awsLink);
+        const fullSourcePattern = /(.*?)\s+page\s+(\d+(?:\s*[-,]\s*\d+)*)\s+\[aws_id:\s+(.*?)\]/gi;
+        const awsIdPattern = /\[aws_id:\s*([^\]]+)\]/gi;
+        const sourceColonPattern = /Source:\s*([^[]+)\[aws_id:\s*(.*?)\]/gi;
+        const fileNamePattern = /([^.\n]+)\s*\[aws_id:\s+(.*?)\]/gi;
         
-        const parts = awsLink.split('_page_');
-        if (parts.length >= 2) {
-          const filename = parts[0].replace(/_/g, ' ') + '.pdf';
-          const pageNum = parts[1];
-          
-          console.log(' Extracted info:', { filename, pageNum });
+        let match;
 
-          const imageUrl = getImageUrl(awsLink);
-          console.log(' Generated image URL:', imageUrl);
+        fullSourcePattern.lastIndex = 0;
+        while ((match = fullSourcePattern.exec(text)) !== null) {
+            const filename = match[1].trim();
+            const pageNum = match[2].trim();
+            const awsLink = match[3].trim();
+            
+            const imageUrl = getImageUrl(awsLink);
 
-          sources.push({
-            filename: filename,
-            pages: pageNum,
-            awsLink: awsLink,
-            url: imageUrl
-          });
+            sources.push({
+                filename: filename,
+                pages: pageNum,
+                awsLink: awsLink,
+                url: imageUrl,
+                fullMatchText: match[0]
+            });
         }
-      }
-    }
 
-    console.log(' === FINAL EXTRACTED SOURCES ===');
-    sources.forEach((source, index) => {
-      console.log(`Source ${index + 1}:`, {
-        filename: source.filename,
-        pages: source.pages,
-        awsLink: source.awsLink,
-        url: source.url,
-        hasUrl: !!source.url
-      });
-    });
-    console.log(' === SOURCE EXTRACTION DEBUG END ===');
-    
-    return sources;
-  } catch (error) {
-    console.error(' Error extracting sources:', error);
-    return [];
-  }
+        awsIdPattern.lastIndex = 0;
+        while ((match = awsIdPattern.exec(text)) !== null) {
+            const awsLink = match[1].trim();
+            
+            const existingSource = sources.find(s => s.awsLink === awsLink);
+            if (!existingSource) {
+                const parts = awsLink.split('_page_');
+                if (parts.length >= 2) {
+                    const filename = parts[0].replace(/_/g, ' ') + '.pdf';
+                    const pageNum = parts[1];
+
+                    const imageUrl = getImageUrl(awsLink);
+
+                    sources.push({
+                        filename: filename,
+                        pages: pageNum,
+                        awsLink: awsLink,
+                        url: imageUrl,
+                        fullMatchText: match[0]
+                    });
+                }
+            }
+        }
+
+        sourceColonPattern.lastIndex = 0;
+        while ((match = sourceColonPattern.exec(text)) !== null) {
+            const filename = match[1].trim();
+            const awsLink = match[2].trim();
+            
+            const existingSource = sources.find(s => s.awsLink === awsLink);
+            if (!existingSource) {
+                const parts = awsLink.split('_page_');
+                const pageNum = parts.length >= 2 ? parts[1] : '1';
+
+                const imageUrl = getImageUrl(awsLink);
+
+                sources.push({
+                    filename: filename,
+                    pages: pageNum,
+                    awsLink: awsLink,
+                    url: imageUrl,
+                    fullMatchText: match[0]
+                });
+            }
+        }
+
+        fileNamePattern.lastIndex = 0;
+        while ((match = fileNamePattern.exec(text)) !== null) {
+            const filename = match[1].trim();
+            const awsLink = match[2].trim();
+            
+            const existingSource = sources.find(s => s.awsLink === awsLink);
+            if (!existingSource) {
+                const parts = awsLink.split('_page_');
+                const pageNum = parts.length >= 2 ? parts[1] : '1';
+
+                const imageUrl = getImageUrl(awsLink);
+
+                sources.push({
+                    filename: filename,
+                    pages: pageNum,
+                    awsLink: awsLink,
+                    url: imageUrl,
+                    fullMatchText: match[0]
+                });
+            }
+        }
+        
+        return sources;
+    } catch (error) {
+        console.error('Error extracting sources:', error);
+        return [];
+    }
 }, []);
 
 const cleanMessageText = useCallback((text: string, sources: SourceReference[]): string => {
-  let cleanedText = text;
-  
-  // Remove source references from the text
-  sources.forEach(source => {
-    if (source.fullMatchText) {
-      cleanedText = cleanedText.replace(source.fullMatchText, '');
-    }
-  });
-  
-  // Clean up extra whitespace and line breaks
-  cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
-  
-  return cleanedText;
+    let cleanedText = text;
+    
+    // First, remove source references
+    sources.forEach((source) => {
+        if (source.fullMatchText) {
+            cleanedText = cleanedText.replace(source.fullMatchText, '');
+        }
+        
+        const awsIdPattern = new RegExp(`\\[aws_id:\\s*${source.awsLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'gi');
+        cleanedText = cleanedText.replace(awsIdPattern, '');
+    });
+    
+    // Remove any remaining aws_id patterns
+    cleanedText = cleanedText.replace(/\[aws_id:\s*[^\]]+\]/gi, '');
+    
+    // Remove Source: patterns but be careful not to break tables
+    cleanedText = cleanedText.replace(/Source:\s*[^[]+\[aws_id:[^\]]+\]/gi, '');
+    
+    // IMPORTANT: Don't remove table formatting or | characters
+    // Only clean up extra whitespace carefully
+    cleanedText = cleanedText
+        .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive line breaks
+        .replace(/[ \t]+/g, ' ') // Normalize spaces but keep structure
+        .trim();
+    
+    return cleanedText;
 }, []);
 
 const sendMessage = useCallback(async (text: string) => {
@@ -1293,25 +1323,27 @@ const sendMessage = useCallback(async (text: string) => {
 
         stopStatusPolling();
 
-        if (!isRequestCancelled) {
-            const extractedSources = extractSourcesFromText(fullMessage);
-            const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
-            
-            console.log(' Final AI message:', cleanedAIMessage); 
-            
-            updateMessage(aiMessageId, {
-                message: cleanedAIMessage, 
-                agentStatus: undefined,
-                sources: extractedSources,
-                highlight: {
-                    title: "AI Response",
-                    rating: 4.8,
-                    reviews: 8399,
-                    description: "Response completed"
-                }
-            });
+if (!isRequestCancelled) {
+    const extractedSources = extractSourcesFromText(fullMessage);
+    const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
+    
+    console.log('📋 Final AI message:', cleanedAIMessage.substring(0, 200) + '...'); 
+    
+    updateMessage(aiMessageId, {
+        message: cleanedAIMessage, // ← Use cleaned message that preserves tables
+        isStreaming: false,
+        agentStatus: undefined,
+        sources: extractedSources,
+        highlight: {
+            title: "AI Response",
+            rating: 4.8,
+            reviews: 8399,
+            description: "Response completed"
+        }
+    });
 
-            console.log('Message processing completed successfully');
+    console.log('✅ Message processing completed successfully');
+
             
             console.log(' Final messages in context:');
             messages.forEach((msg, index) => {
@@ -1704,9 +1736,11 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         clearAllUserData,
         addNewSession,
         cleanupEmptySessions,
-        getCurrentUserId, // ← Add this line
-        enhancedAutoSave, // ← Add this line
-        hasSessionContent, // ← Add this line
+        getCurrentUserId,
+        enhancedAutoSave,
+        hasSessionContent,
+        extractSourcesFromText,
+        cleanMessageText,
     }}>
         {children}
     </ChatContext.Provider>
