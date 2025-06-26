@@ -39,7 +39,7 @@ import FilterLight from './light/Filter.svg';
 import LogoLight from './light/Logo.svg';
 import MenuLight from './light/Menu.svg';
 import ThumbsUpLight from './light/thumbs-up.svg';
-import ThumbsDownLight from './light/thumbs-down.svg'; // Add this line
+import ThumbsDownLight from './light/thumbs-down.svg'; 
 
 const icons = {
     Logo,
@@ -85,7 +85,7 @@ const icons = {
     LogoLight,
     MenuLight,
     ThumbsUpLight,
-    ThumbsDownLight, // Add this line
+    ThumbsDownLight,
 };
 
 const themedIconMap = {
@@ -135,7 +135,7 @@ const themedIconMap = {
     },
     ThumbsDown: {
         dark: ThumbsDown,
-        light: ThumbsDownLight, // Uses your new light/thumbs-down.svg
+        light: ThumbsDownLight, 
     }
 };
 

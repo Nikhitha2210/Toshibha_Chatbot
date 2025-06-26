@@ -275,7 +275,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
 
     const styles = getStyles(theme);
     const ThemedThumbsUpIcon = getThemedIcon('ThumbsUp', theme);
-    const ThemedThumbsDownIcon = getThemedIcon('ThumbsDown', theme); // Add this line
+    const ThemedThumbsDownIcon = getThemedIcon('ThumbsDown', theme); 
 
     const isErrorMessage = message.toLowerCase().includes('error:') ||
         message.toLowerCase().includes('failed') ||
