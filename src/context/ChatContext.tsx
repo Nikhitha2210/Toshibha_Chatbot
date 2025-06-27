@@ -54,7 +54,7 @@ export interface SourceReference {
     pages: string;
     awsLink: string;
     url?: string;
-    fullMatchText?: string; // Add this line
+    fullMatchText?: string; 
 
 }
 
@@ -88,7 +88,7 @@ interface BackendMessage {
     feedback?: string;
 }
 
-interface WebAppSessionObject {
+interface SessionObject {
     id: string;
     label: string;
     messages: WebAppChatMessageObject[];
@@ -115,10 +115,8 @@ interface WebAppChatMessageObject {
     media?: any[];
     isStreaming?: boolean;
     agentStatus?: string;
-    sources?: SourceReference[]; // ← Add this line
-
+    sources?: SourceReference[];
 }
-
 type ChatContextType = {
     messages: ChatMessage[];
     sessions: ChatSession[];
@@ -244,10 +242,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
 
-                // Update the session list with only valid sessions
                 await AsyncStorage.setItem(`user_sessions_${userId}`, JSON.stringify(validSessions));
 
-                // Update in-memory sessions
                 setSessions(prev => prev.filter(session => hasSessionContent(session.messages)));
 
                 console.log(` Cleanup complete: Removed ${removedCount} empty sessions, kept ${validSessions.length} valid sessions`);
@@ -430,7 +426,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 };
             });
 
-            // ✅ FIXED: Filter out sessions without meaningful content
             const validSessions = convertedSessions.filter(session => hasSessionContent(session.messages));
             validSessions.sort((a, b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime());
 
@@ -465,9 +460,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             return [];
         }
 
-        const backendSessions: WebAppSessionObject[] = await response.json();
+        const backendSessions: SessionObject[] = await response.json();
 
-        const convertedSessions: ChatSession[] = backendSessions.map((session: WebAppSessionObject) => ({
+        const convertedSessions: ChatSession[] = backendSessions.map((session: SessionObject) => ({
             id: session.id,
             title: session.label || `Session ${new Date(session.creationDate).toLocaleDateString()}`,
             timestamp: session.creationDate,
@@ -507,7 +502,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         console.error('Failed to fetch backend sessions:', error);
         return [];
     }
-}, [authContext, getCurrentUserId, hasSessionContent]); // REMOVE extractSourcesFromText, cleanMessageText from here
+}, [authContext, getCurrentUserId, hasSessionContent]); 
 
     const saveSessionToBackend = useCallback(async (session: ChatSession) => {
         try {
@@ -521,13 +516,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                 return false;
             }
 
-            const webAppSession: WebAppSessionObject = {
+            const webAppSession: SessionObject = {
     id: session.id,
     label: session.title,
     creationDate: session.creationDate || session.timestamp,
     messages: session.messages.map(msg => ({
         id: msg.id,
-        userName: getCurrentUserId(), // ← This will now be email
+        userName: getCurrentUserId(), 
         isBot: !msg.isUser,
         date: new Date().toISOString(),
         text: msg.message,
@@ -597,7 +592,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
                             body: JSON.stringify(payloadFormats[i])
                         });
 
-                        console.log(`📊 ${url} - Status: ${response.status}`);
+                        console.log(` ${url} - Status: ${response.status}`);
 
                         if (response.ok) {
                             const responseText = await response.text();
@@ -688,7 +683,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const saveSessionToStorage = useCallback(async (session: ChatSession) => {
         try {
             if (!hasSessionContent(session.messages)) {
-                console.log('⏭️ Skipping storage save - session has no meaningful content');
+                console.log('⏭Skipping storage save - session has no meaningful content');
                 return;
             }
 
@@ -791,7 +786,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
         try {
             if (!hasSessionContent(sessionData.messages)) {
-                console.log('⏭️ Skipping auto-save - session has no meaningful content');
+                console.log('⏭ Skipping auto-save - session has no meaningful content');
                 return;
             }
 
@@ -837,7 +832,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             setCurrentSessionId(null);
             setSelectedSessionState(null);
 
-            console.log('🗑️ All user data cleared');
+            console.log(' All user data cleared');
 
         } catch (error) {
             console.error('Failed to clear user data:', error);
@@ -1080,7 +1075,6 @@ const extractSourcesFromText = useCallback((text: string): SourceReference[] => 
 const cleanMessageText = useCallback((text: string, sources: SourceReference[]): string => {
     let cleanedText = text;
     
-    // First, remove source references
     sources.forEach((source) => {
         if (source.fullMatchText) {
             cleanedText = cleanedText.replace(source.fullMatchText, '');
@@ -1090,14 +1084,11 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
         cleanedText = cleanedText.replace(awsIdPattern, '');
     });
     
-    // Remove any remaining aws_id patterns
     cleanedText = cleanedText.replace(/\[aws_id:\s*[^\]]+\]/gi, '');
     
-    // Remove Source: patterns but be careful not to break tables
     cleanedText = cleanedText.replace(/Source:\s*[^[]+\[aws_id:[^\]]+\]/gi, '');
     
-    // IMPORTANT: Don't remove table formatting or | characters
-    // Only clean up extra whitespace carefully
+
     cleanedText = cleanedText
         .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive line breaks
         .replace(/[ \t]+/g, ' ') // Normalize spaces but keep structure
@@ -1112,8 +1103,8 @@ const sendMessage = useCallback(async (text: string) => {
         return;
     }
 
-    console.log('===  STARTING SEND MESSAGE ===');
-    console.log('Original user text:', text); // 
+    console.log('=== STARTING SEND MESSAGE WITH SESSION OBJECT ===');
+    console.log('Original user text:', text);
     
     let isRequestCancelled = false;
     let cleanupFunctions: (() => void)[] = [];
@@ -1122,7 +1113,7 @@ const sendMessage = useCallback(async (text: string) => {
         if (!currentSessionId) {
             const newSessionId = uuidv4();
             setCurrentSessionId(newSessionId);
-            console.log('🆕 Created new session:', newSessionId);
+            console.log(' Created new session:', newSessionId);
         }
 
         const isSessionValid = await authContext.validateSessionBeforeRequest();
@@ -1139,7 +1130,7 @@ const sendMessage = useCallback(async (text: string) => {
         setIsLoading(true);
         setError(null);
 
-        await saveRecentQuery(text.trim()); 
+        await saveRecentQuery(text.trim());
 
         const userMessageId = uuidv4();
         const aiMessageId = uuidv4();
@@ -1163,8 +1154,41 @@ const sendMessage = useCallback(async (text: string) => {
             }
         };
 
-        console.log(' Adding user message:', userMessage.message);
+        console.log('🔍 Adding user message:', userMessage.message);
         addMessage(userMessage);
+
+        const currentSessionMessages = [...messages, userMessage];
+        
+        const sessionObject: SessionObject = {
+            id: currentSessionId || uuidv4(),
+            label: currentSessionMessages.find(msg => msg.isUser)?.message.substring(0, 50) || 'Chat Session',
+            creationDate: new Date().toISOString(),
+            messages: currentSessionMessages
+                .filter(msg => !msg.isStreaming)
+                .map(msg => ({
+                    id: msg.id,
+                    userName: getCurrentUserId(),
+                    isBot: !msg.isUser,
+                    date: new Date().toISOString(),
+                    text: msg.message,
+                    vote: msg.hasVoted ? (msg.voteType === 'upvote' ? 1 : (msg.voteType === 'downvote' ? -1 : 0)) : 0,
+                    feedback: msg.feedback || '',
+                    feedbackfiles: undefined,
+                    files: undefined,
+                    media: undefined,
+                    isStreaming: false,
+                    agentStatus: undefined,
+                    sources: msg.sources || []
+                }))
+        };
+
+        console.log('Complete Session Object:');
+        console.log('  - Session ID:', sessionObject.id);
+        console.log('  - Label:', sessionObject.label);
+        console.log('  - Messages Count:', sessionObject.messages.length);
+        sessionObject.messages.forEach((msg, i) => {
+            console.log(`    ${i + 1}. ${msg.isBot ? 'AI' : 'USER'}: "${msg.text.substring(0, 50)}..."`);
+        });
 
         const aiMessage: ChatMessage = {
             id: aiMessageId,
@@ -1184,24 +1208,31 @@ const sendMessage = useCallback(async (text: string) => {
 
         addMessage(aiMessage);
 
+        // ✅ CRITICAL: Send request in web app format with session object
         const requestBody = {
             query: text.trim(), 
             qid: aiMessageId,
             uid: getCurrentUserId(),
             sid: currentSessionId || APP_SESSION_ID,
-            messages: messages.filter(msg => !msg.isStreaming).map(msg => ({
-                content: msg.message, 
-                isBot: !msg.isUser
-            })),
-            collection: 'chatbot'
+            // ✅ Send complete session object for full context
+            session: sessionObject,
+            // ✅ Also send messages array for compatibility (last 12 like web app)
+            messages: sessionObject.messages.slice(-12),
+            collection: 'cisco_clo'  // Use web app's default collection
         };
 
-        console.log('📡 Request body query:', requestBody.query); 
+        console.log(' Request body with session object:');
+        console.log('  - Query:', requestBody.query);
+        console.log('  - Session ID:', requestBody.sid);
+        console.log('  - User ID:', requestBody.uid);
+        console.log('  - Messages in session:', requestBody.session.messages.length);
+        console.log('  - Messages array length:', requestBody.messages.length);
+        console.log('  - Collection:', requestBody.collection);
 
         const chatUrl = getChatApiUrl('/run');
-        console.log('📡 Sending chat request to:', chatUrl);
+        console.log(' Sending chat request to:', chatUrl);
 
-        // Status polling setup (unchanged)
+        // Status polling setup
         let statusInterval: NodeJS.Timeout | null = null;
         
         const startStatusPolling = () => {
@@ -1243,9 +1274,11 @@ const sendMessage = useCallback(async (text: string) => {
                                 }
                             }
                         } catch (parseError) {
+                            // Ignore parse errors
                         }
                     }
                 } catch (statusError) {
+                    // Ignore status errors
                 }
             }, 3000);
         };
@@ -1323,32 +1356,27 @@ const sendMessage = useCallback(async (text: string) => {
 
         stopStatusPolling();
 
-if (!isRequestCancelled) {
-    const extractedSources = extractSourcesFromText(fullMessage);
-    const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
-    
-    console.log('📋 Final AI message:', cleanedAIMessage.substring(0, 200) + '...'); 
-    
-    updateMessage(aiMessageId, {
-        message: cleanedAIMessage, // ← Use cleaned message that preserves tables
-        isStreaming: false,
-        agentStatus: undefined,
-        sources: extractedSources,
-        highlight: {
-            title: "AI Response",
-            rating: 4.8,
-            reviews: 8399,
-            description: "Response completed"
-        }
-    });
-
-    console.log('✅ Message processing completed successfully');
-
+        if (!isRequestCancelled) {
+            const extractedSources = extractSourcesFromText(fullMessage);
+            const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
             
-            console.log(' Final messages in context:');
-            messages.forEach((msg, index) => {
-                console.log(`Message ${index}: ${msg.isUser ? 'USER' : 'AI'} - "${msg.message}"`);
+            console.log(' Final AI message:', cleanedAIMessage.substring(0, 200) + '...');
+            
+            updateMessage(aiMessageId, {
+                message: cleanedAIMessage,
+                isStreaming: false,
+                agentStatus: undefined,
+                sources: extractedSources,
+                highlight: {
+                    title: "AI Response",
+                    rating: 4.8,
+                    reviews: 8399,
+                    description: "Response completed"
+                }
             });
+
+            console.log('Message processing completed successfully');
+            console.log(' Session now contains', sessionObject.messages.length + 1, 'messages total');
         }
 
     } catch (error) {
@@ -1358,7 +1386,6 @@ if (!isRequestCancelled) {
             try {
                 cleanup();
             } catch (err) {
-                // Ignore cleanup errors
             }
         });
 
@@ -1400,7 +1427,6 @@ if (!isRequestCancelled) {
             try {
                 cleanup();
             } catch (err) {
-                // Ignore cleanup errors
             }
         });
         
@@ -1441,10 +1467,10 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
     const voteUrl = `${API_CONFIG.CHAT_API_BASE_URL}/vote`;
 
     const votePayload = {
-      message_id: aiMessage.id, // Use the message ID that matches backend qid
+      message_id: aiMessage.id, 
       user_id: getCurrentUserId(),
       vote: voteType === 'upvote' ? 1 : -1,
-      session_id: currentSessionId || APP_SESSION_ID // Use proper session ID
+      session_id: currentSessionId || APP_SESSION_ID 
     };
 
     console.log('Vote payload:', JSON.stringify(votePayload, null, 2));
@@ -1510,7 +1536,6 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
 
         const feedbackUrl = `${API_CONFIG.CHAT_API_BASE_URL}/feedback`;
 
-        // Extract just the feedback text
         let feedbackText = '';
         if (typeof feedback === 'string') {
             feedbackText = feedback;
@@ -1523,11 +1548,11 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         const requestBody = {
             message_id: aiMessage.id,
             user_id: getCurrentUserId(),
-            feedback: feedbackText, // ← Just the text, not JSON
+            feedback: feedbackText, 
             session_id: currentSessionId || APP_SESSION_ID
         };
 
-        console.log('📝 Feedback request body:', JSON.stringify(requestBody, null, 2));
+        console.log(' Feedback request body:', JSON.stringify(requestBody, null, 2));
 
         const response = await safeFetch(feedbackUrl, {
             method: 'POST',
@@ -1578,13 +1603,11 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         }
     }, []);
 
-    // ✅ CRITICAL: Crash-proof initialization
     useEffect(() => {
         let isMounted = true;
         let initTimeout: NodeJS.Timeout | null = null;
         
         const initializeApp = async () => {
-            // Prevent multiple rapid initializations
             if (!authContext.state.isAuthenticated || !isMounted) {
                 console.log('⏭️ Skipping initialization - not authenticated or unmounted');
                 return;
@@ -1593,7 +1616,6 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
             console.log(' ChatProvider initializing (single instance)...');
 
             try {
-                // Add delay to prevent race conditions
                 await new Promise(resolve => {
                     initTimeout = setTimeout(resolve, 100);
                 });
@@ -1618,7 +1640,6 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
             }
         };
 
-        // Debounce initialization to prevent multiple calls
         const debounceTimeout = setTimeout(() => {
             if (isMounted) {
                 initializeApp();
@@ -1634,7 +1655,6 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         };
     }, [authContext.state.isAuthenticated]);
 
-    // ✅ FIXED: Only auto-save sessions with meaningful content
     useEffect(() => {
         if (messages.length >= 2 && currentSessionId && authContext.state.isAuthenticated && hasSessionContent(messages)) {
             if (autoSaveTimerRef.current) {
