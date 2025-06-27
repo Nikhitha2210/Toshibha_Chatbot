@@ -1,4 +1,3 @@
-// src/components/Android15KeyboardHandler.tsx
 
 import React, { useEffect, useState, ReactNode } from 'react';
 import { 
@@ -12,7 +11,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// ✅ FIXED: Add proper TypeScript interfaces
 interface Android15KeyboardHandlerProps {
   children: ReactNode;
 }
@@ -27,7 +25,6 @@ export const Android15KeyboardHandler: React.FC<Android15KeyboardHandlerProps> =
   const [screenHeight, setScreenHeight] = useState<number>(Dimensions.get('window').height);
   const insets = useSafeAreaInsets();
   
-  // ✅ FIXED: Remove DeviceInfo import, use Platform.Version directly
   const isAndroid15 = Platform.OS === 'android' && Platform.Version >= 35;
 
   useEffect(() => {
@@ -74,7 +71,6 @@ export const Android15KeyboardHandler: React.FC<Android15KeyboardHandlerProps> =
   );
 };
 
-// Enhanced PromptInput wrapper for Android 15
 export const Android15InputWrapper: React.FC<Android15InputWrapperProps> = ({ children, style }) => {
   const [keyboardVisible, setKeyboardVisible] = useState<boolean>(false);
   const insets = useSafeAreaInsets();
