@@ -41,7 +41,6 @@ export class AuthApiClient {
 
   async login(email: string, password: string): Promise<TokenResponse> {
     try {
-
       const requestBody = {
         email: email,
         password: password,
@@ -183,6 +182,52 @@ export class AuthApiClient {
       });
     } catch (error) {
       console.warn('Logout request failed, but continuing with local cleanup');
+    }
+  }
+
+  async resetPassword(accessToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/change-password`, {
+        method: "POST",
+        headers: this.getHeaders({
+          Authorization: `Bearer ${accessToken}`,
+        }),
+        body: JSON.stringify({ new_password: newPassword }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to reset password");
+      }
+
+      return { success: true, message: "Password successfully changed" };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while resetting password');
+    }
+  }
+
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to send reset email");
+      }
+
+      return { success: true, message: "Reset email sent" };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while sending reset email');
     }
   }
 

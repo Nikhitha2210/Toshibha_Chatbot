@@ -51,19 +51,14 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
     const { inputText: promptInputText, setInputText: setPromptInputText } = usePrompt();
 
     const inputRef = useRef<TextInput>(null);
-    
-    // ✅ NEW: Add state for visual feedback when pressing the button
-    const [isPressed, setIsPressed] = useState(false);
 
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
 
-    // Sync with PromptContext (for when PromptCards/RecentQueries set text)
     useEffect(() => {
         if (promptInputText && promptInputText !== inputText) {
-            console.log('🔄 Syncing prompt text to input:', promptInputText);
             setInputText(promptInputText);
-            setPromptInputText(''); // Clear after setting
+            setPromptInputText('');
         }
     }, [promptInputText, inputText, setInputText, setPromptInputText]);
 
@@ -84,7 +79,6 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
 
         const messageText = inputText.trim();
         
-        // Clear the input
         clearText();
 
         try {
@@ -97,7 +91,6 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
 
         } catch (error) {
             console.error('Error sending message:', error);
-            // Restore text on error
             setInputText(messageText);
         }
     };
@@ -110,22 +103,16 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
         setInputText(text);
     };
 
-    // ✅ NEW: ChatGPT-style toggle voice button (click to start/stop)
     const handleVoiceToggle = async () => {
         if (isListening) {
-            console.log('🎤 Stopping voice recording (manual stop)');
             await stopListening();
         } else {
-            console.log('🎤 Starting voice recording (click to start)');
             await startListening();
         }
     };
 
-    console.log("🎤 Voice Status - isListening:", isListening, "inputText length:", inputText.length);
-
     return (
         <View style={styles.askSection}>
-            {/* ✅ ENHANCED: ChatGPT-style voice status indicator */}
             {isListening && (
                 <View style={{
                     position: 'absolute',
@@ -147,14 +134,14 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                         shadowOpacity: 0.25,
                         shadowRadius: 4,
                         elevation: 8,
-                                            }}>
+                    }}>
                         <Text style={{ 
                             fontSize: 13, 
                             color: '#fff',
                             fontWeight: '600',
                             textAlign: 'center'
                         }}>
-                            🎤 Listening... Tap ✓ when done speaking
+                            Listening... Tap checkmark when done speaking
                         </Text>
                     </View>
                 </View>
@@ -171,12 +158,11 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     onSubmitEditing={handleSubmitEditing}
                     multiline
                     blurOnSubmit={true}
-                    editable={!isLoading && !isListening} // ✅ Disable typing while recording
+                    editable={!isLoading && !isListening}
                 />
             </View>
             
             <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center', marginRight: 5 }}>
-                {/* Clear Button - appears when there's text and not listening */}
                 {inputText.length > 0 && !isListening && (
                     <TouchableOpacity 
                         onPress={clearText} 
@@ -194,12 +180,11 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     </TouchableOpacity>
                 )}
 
-                {/* ✅ NEW: Show Done button when listening */}
                 {isListening && (
                     <TouchableOpacity 
                         onPress={handleVoiceToggle} 
                         style={{
-                            backgroundColor: '#22C55E', // Green checkmark
+                            backgroundColor: '#22C55E',
                             borderRadius: 20,
                             padding: 8,
                             minWidth: 40,
@@ -214,10 +199,9 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     </TouchableOpacity>
                 )}
 
-                {/* ✅ ChatGPT-Style: Click to Start Voice Recording (hidden when listening) */}
                 {!isListening && (
                     <TouchableOpacity
-                        onPress={handleVoiceToggle}  // ✅ Single tap to start like ChatGPT
+                        onPress={handleVoiceToggle}
                         disabled={isLoading}
                         style={{
                             backgroundColor: 'transparent',
@@ -239,7 +223,6 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     </TouchableOpacity>
                 )}
 
-                {/* Show animated dots when listening */}
                 {isListening && (
                     <View style={{
                         justifyContent: 'center',
@@ -251,7 +234,6 @@ const PromptInput = ({ clearOnSend = false }: { clearOnSend?: boolean }) => {
                     </View>
                 )}
 
-                {/* Send Button */}
                 <TouchableOpacity onPress={handleSend} disabled={isLoading || !inputText.trim()}>
                     <View style={{ opacity: (isLoading || !inputText.trim()) ? 0.5 : 1 }}>
                         <IconAssets.Send width={25} height={25} />

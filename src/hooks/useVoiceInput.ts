@@ -10,182 +10,237 @@ export const useVoiceInput = () => {
   
   const isRecordingRef = useRef<boolean>(false);
   const isComponentMountedRef = useRef<boolean>(true);
-  const accumulatedTextRef = useRef<string>(''); // All speech from this session
-  const baseTextRef = useRef<string>(''); // Text before voice started
+  const accumulatedTextRef = useRef<string>('');
+  const baseTextRef = useRef<string>('');
+  const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitializingRef = useRef<boolean>(false);
+  const lastRestartRef = useRef<number>(0);
 
-  // Cleanup on unmount
+  const androidVersion = Platform.OS === 'android' ? parseInt(Platform.Version as unknown as string, 10) : 0;
+  const isAndroid15Plus = androidVersion >= 34;
+
   useEffect(() => {
     isComponentMountedRef.current = true;
     
     return () => {
       isComponentMountedRef.current = false;
-      
-      try {
-        if (isRecordingRef.current) {
-          Voice.stop().catch(() => {});
-          Voice.cancel().catch(() => {});
-        }
-        Voice.removeAllListeners();
-        Voice.destroy().catch(() => {});
-        isRecordingRef.current = false;
-      } catch (error) {
-        // Silent cleanup
-      }
+      cleanup();
     };
   }, []);
 
-  // Safe state updates
+  const cleanup = useCallback(() => {
+    try {
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+      
+      if (isRecordingRef.current) {
+        Voice.stop().catch(() => {});
+        Voice.cancel().catch(() => {});
+      }
+      
+      Voice.removeAllListeners();
+      Voice.destroy().catch(() => {});
+      
+      isRecordingRef.current = false;
+      isInitializingRef.current = false;
+    } catch (error) {}
+  }, []);
+
   const safeSetState = useCallback((stateSetter: () => void) => {
     if (isComponentMountedRef.current) {
       try {
         stateSetter();
-      } catch (error) {
-        // Ignore errors when unmounting
-      }
+      } catch (error) {}
     }
   }, []);
 
-  // Speech started
+  const resetTimeout = useCallback(() => {
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleTimeout = useCallback(() => {
+    resetTimeout();
+    
+    const timeout = isAndroid15Plus ? 25000 : 45000;
+    
+    sessionTimeoutRef.current = setTimeout(() => {
+      if (isRecordingRef.current && isComponentMountedRef.current) {
+        stopListening();
+      }
+    }, timeout);
+  }, [isAndroid15Plus]);
+
   const onSpeechStart = useCallback(() => {
-    console.log('🎤 Voice recording started');
+    if (!isComponentMountedRef.current) return;
+    
     safeSetState(() => {
       setIsListening(true);
     });
-  }, [safeSetState]);
+    
+    scheduleTimeout();
+  }, [safeSetState, scheduleTimeout]);
 
-  // Final speech results (when user pauses)
   const onSpeechResults = useCallback((event: SpeechResultsEvent) => {
-    const newText = event.value?.[0] || '';
-    console.log(' Speech result:', newText);
+    if (!isComponentMountedRef.current || !isRecordingRef.current) return;
     
-    if (newText && newText.trim() && isComponentMountedRef.current && isRecordingRef.current) {
-      // Add new text to accumulated text
-      const currentText = accumulatedTextRef.current;
-      const updatedText = currentText 
-        ? `${currentText} ${newText}`.trim()
-        : newText;
+    try {
+      const newText = event.value?.[0] || '';
       
-      accumulatedTextRef.current = updatedText;
-      
-      // Show in UI (base text + accumulated voice text)
-      const displayText = baseTextRef.current 
-        ? `${baseTextRef.current} ${updatedText}`.trim()
-        : updatedText;
-      
-      safeSetState(() => {
-        setInputText(displayText);
-        setVoiceInputText(displayText);
-      });
-      
-      console.log(' Accumulated speech:', updatedText);
-    }
-  }, [safeSetState]);
+      if (newText && newText.trim()) {
+        const currentText = accumulatedTextRef.current;
+        const updatedText = currentText 
+          ? `${currentText} ${newText}`.trim()
+          : newText;
+        
+        accumulatedTextRef.current = updatedText;
+        
+        const displayText = baseTextRef.current 
+          ? `${baseTextRef.current} ${updatedText}`.trim()
+          : updatedText;
+        
+        safeSetState(() => {
+          setInputText(displayText);
+          setVoiceInputText(displayText);
+        });
+        
+        scheduleTimeout();
+      }
+    } catch (error) {}
+  }, [safeSetState, scheduleTimeout]);
 
-  // Partial results (real-time feedback)
   const onSpeechPartialResults = useCallback((event: SpeechResultsEvent) => {
-    const partialText = event.value?.[0] || '';
+    if (!isComponentMountedRef.current || !isRecordingRef.current) return;
     
-    if (partialText && partialText.trim() && isComponentMountedRef.current && isRecordingRef.current) {
-      // Show accumulated + current partial
-      const currentAccumulated = accumulatedTextRef.current;
-      const tempText = currentAccumulated 
-        ? `${currentAccumulated} ${partialText}`.trim()
-        : partialText;
+    try {
+      const partialText = event.value?.[0] || '';
       
-      const displayText = baseTextRef.current 
-        ? `${baseTextRef.current} ${tempText}`.trim()
-        : tempText;
-      
-      safeSetState(() => {
-        setInputText(displayText);
-        setVoiceInputText(displayText);
-      });
-    }
+      if (partialText && partialText.trim()) {
+        const currentAccumulated = accumulatedTextRef.current;
+        const tempText = currentAccumulated 
+          ? `${currentAccumulated} ${partialText}`.trim()
+          : partialText;
+        
+        const displayText = baseTextRef.current 
+          ? `${baseTextRef.current} ${tempText}`.trim()
+          : tempText;
+        
+        safeSetState(() => {
+          setInputText(displayText);
+          setVoiceInputText(displayText);
+        });
+      }
+    } catch (error) {}
   }, [safeSetState]);
 
-  // Speech engine stopped (restart to keep listening)
-  const onSpeechEnd = useCallback(() => {
-    console.log(' Speech engine ended');
-    
-    // If we're still supposed to be recording, restart the engine
-    if (isRecordingRef.current && isComponentMountedRef.current) {
-      console.log(' Restarting speech engine to continue listening...');
+  const restartVoice = useCallback(async () => {
+    if (!isRecordingRef.current || !isComponentMountedRef.current || isInitializingRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastRestartRef.current < 1000) {
+      return;
+    }
+    lastRestartRef.current = now;
+
+    isInitializingRef.current = true;
+
+    try {
+      await Voice.destroy();
+      await new Promise(resolve => setTimeout(resolve, isAndroid15Plus ? 300 : 150));
       
-      setTimeout(async () => {
-        if (isRecordingRef.current && isComponentMountedRef.current) {
-          try {
-            await Voice.start('en-US', {
-              EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
-              EXTRA_PARTIAL_RESULTS: true,
-              EXTRA_MAX_RESULTS: 1,
-            });
-          } catch (error) {
-            console.log(' Error restarting voice:', error);
-            // Stop if restart fails
-            safeSetState(() => {
-              setIsListening(false);
-              isRecordingRef.current = false;
-            });
+      if (!isRecordingRef.current || !isComponentMountedRef.current) {
+        isInitializingRef.current = false;
+        return;
+      }
+
+      setupListeners();
+      
+      const config = isAndroid15Plus 
+        ? {
+            EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+            EXTRA_PARTIAL_RESULTS: true,
+            EXTRA_MAX_RESULTS: 1,
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
           }
+        : {
+            EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+            EXTRA_PARTIAL_RESULTS: true,
+            EXTRA_MAX_RESULTS: 1,
+          };
+
+      await Voice.start('en-US', config);
+      isInitializingRef.current = false;
+      
+    } catch (error) {
+      isInitializingRef.current = false;
+      
+      if (isRecordingRef.current && isComponentMountedRef.current) {
+        safeSetState(() => {
+          setIsListening(false);
+          isRecordingRef.current = false;
+        });
+        resetTimeout();
+      }
+    }
+  }, [safeSetState, isAndroid15Plus, resetTimeout]);
+
+  const onSpeechEnd = useCallback(() => {
+    if (!isComponentMountedRef.current) return;
+    
+    if (isRecordingRef.current && !isInitializingRef.current) {
+      setTimeout(() => {
+        if (isRecordingRef.current && isComponentMountedRef.current) {
+          restartVoice();
         }
-      }, 100);
+      }, isAndroid15Plus ? 200 : 100);
     } else {
-      // User stopped manually
       safeSetState(() => {
         setIsListening(false);
       });
     }
-  }, [safeSetState]);
+  }, [restartVoice, safeSetState, isAndroid15Plus]);
 
-  // Handle speech errors
   const onSpeechError = useCallback((event: SpeechErrorEvent) => {
-    const errorCode = event.error?.code || 'unknown';
-    console.log(' Speech error:', errorCode);
-   
+    if (!isComponentMountedRef.current) return;
     
-    if (errorCode === '7') {
-      // No speech detected - this is normal, continue listening
-      console.log(' No speech detected, continuing to listen...');
-      return;
-    }
-    
-    if (errorCode === '8' && isRecordingRef.current) {
-      // Service busy, try to restart
-      console.log(' Service busy, restarting...');
-      setTimeout(async () => {
-        if (isRecordingRef.current && isComponentMountedRef.current) {
-          try {
-            await Voice.start('en-US', {
-              EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
-              EXTRA_PARTIAL_RESULTS: true,
-              EXTRA_MAX_RESULTS: 1,
-            });
-          } catch (error) {
-            console.log(' Error restarting after busy:', error);
-            safeSetState(() => {
-              setIsListening(false);
-              isRecordingRef.current = false;
-            });
+    try {
+      const errorCode = event.error?.code || 'unknown';
+      
+      if (errorCode === '7' && isRecordingRef.current) {
+        return;
+      }
+      
+      if ((errorCode === '8' || errorCode === '5') && isRecordingRef.current && !isInitializingRef.current) {
+        setTimeout(() => {
+          if (isRecordingRef.current && isComponentMountedRef.current) {
+            restartVoice();
           }
-        }
-      }, 200);
-      return;
-    }
-    
-    // For other errors, stop listening
-    console.log(' Stopping due to error:', errorCode);
-    safeSetState(() => {
-      setIsListening(false);
-      isRecordingRef.current = false;
-    });
-    
-    if (errorCode === '9') {
-      Alert.alert('Permission Error', 'Microphone permission is required.');
-    }
-  }, [safeSetState]);
+        }, isAndroid15Plus ? 500 : 300);
+        return;
+      }
+      
+      if (isRecordingRef.current) {
+        safeSetState(() => {
+          setIsListening(false);
+          isRecordingRef.current = false;
+        });
+        resetTimeout();
+      }
+      
+      if (errorCode === '9') {
+        Alert.alert('Permission Error', 'Microphone permission is required.');
+      }
+    } catch (error) {}
+  }, [safeSetState, restartVoice, resetTimeout, isAndroid15Plus]);
 
-  // Setup voice listeners
-  const setupVoiceListeners = useCallback(() => {
+  const setupListeners = useCallback(() => {
     try {
       Voice.removeAllListeners();
       
@@ -195,17 +250,12 @@ export const useVoiceInput = () => {
       Voice.onSpeechEnd = onSpeechEnd;
       Voice.onSpeechError = onSpeechError;
       
-      // Silent handlers
       Voice.onSpeechVolumeChanged = () => {};
       Voice.onSpeechRecognized = () => {};
       
-      console.log(' Voice listeners setup');
-    } catch (error) {
-      console.log('Voice listener setup error:', error);
-    }
+    } catch (error) {}
   }, [onSpeechStart, onSpeechResults, onSpeechPartialResults, onSpeechEnd, onSpeechError]);
 
-  // Check microphone permissions
   const checkPermissions = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       try {
@@ -219,7 +269,6 @@ export const useVoiceInput = () => {
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
-        console.log('Permission error:', err);
         return false;
       }
     }
@@ -227,79 +276,72 @@ export const useVoiceInput = () => {
   }, []);
 
   const startListening = useCallback(async (): Promise<void> => {
-    if (isRecordingRef.current || !isComponentMountedRef.current) {
-      console.log(' Already listening or component unmounted');
-      return;
-    }
-
-    console.log(' STARTING continuous voice recording...');
-
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) {
-      Alert.alert('Permission Required', 'Microphone permission is required for voice input.');
+    if (isRecordingRef.current || !isComponentMountedRef.current || isInitializingRef.current) {
       return;
     }
 
     try {
-      // Store current text as base
+      const hasPermission = await checkPermissions();
+      if (!hasPermission) {
+        Alert.alert('Permission Required', 'Microphone permission is required for voice input.');
+        return;
+      }
+
       baseTextRef.current = inputText;
       accumulatedTextRef.current = '';
+      lastRestartRef.current = 0;
       
-      // Clean up previous session
       await Voice.destroy().catch(() => {});
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 150));
       
       if (!isComponentMountedRef.current) return;
 
-      // Setup listeners
-      setupVoiceListeners();
-      
-      // Mark as recording
+      setupListeners();
       isRecordingRef.current = true;
       
-      // Start voice recognition
-      await Voice.start('en-US', {
-        EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
-        EXTRA_PARTIAL_RESULTS: true,
-        EXTRA_MAX_RESULTS: 1,
-      });
-      
-      console.log('✅ Continuous voice recording started - speak now!');
+      const config = isAndroid15Plus 
+        ? {
+            EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+            EXTRA_PARTIAL_RESULTS: true,
+            EXTRA_MAX_RESULTS: 1,
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
+          }
+        : {
+            EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+            EXTRA_PARTIAL_RESULTS: true,
+            EXTRA_MAX_RESULTS: 1,
+          };
+
+      await Voice.start('en-US', config);
       
     } catch (error) {
-      console.log(' Voice start error:', error);
-      
       safeSetState(() => {
         setIsListening(false);
         isRecordingRef.current = false;
       });
       
-      Alert.alert('Voice Error', 'Could not start voice recording. Please try again.');
+      Alert.alert('Voice Error', 'Could not start voice recording.');
     }
-  }, [checkPermissions, setupVoiceListeners, inputText, safeSetState]);
+  }, [checkPermissions, setupListeners, inputText, safeSetState, isAndroid15Plus]);
 
-  // ✅ STOP LISTENING - Click tick/stop button
   const stopListening = useCallback(async (): Promise<void> => {
-    if (!isRecordingRef.current || !isComponentMountedRef.current) {
-      console.log('Not currently listening');
+    if (!isRecordingRef.current && !isListening) {
       return;
     }
 
-    console.log(' STOPPING voice recording...');
-
-    // Mark as not recording (prevents restart)
     isRecordingRef.current = false;
+    isInitializingRef.current = false;
+    resetTimeout();
 
     try {
-      // Stop voice recognition
       await Promise.race([
         Promise.all([Voice.stop(), Voice.cancel()]),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 2000)
+          setTimeout(() => reject(new Error('Timeout')), 1500)
         )
       ]);
       
-      // Finalize text
       if (isComponentMountedRef.current) {
         const finalText = baseTextRef.current && accumulatedTextRef.current
           ? `${baseTextRef.current} ${accumulatedTextRef.current}`.trim()
@@ -310,20 +352,15 @@ export const useVoiceInput = () => {
           setVoiceInputText(finalText);
           setIsListening(false);
         });
-        
-        console.log(' Final voice text:', finalText);
       }
       
     } catch (error) {
-      console.log('Voice stop error (handled):', error);
-      
       safeSetState(() => {
         setIsListening(false);
       });
     }
-  }, [safeSetState, inputText]);
+  }, [safeSetState, inputText, resetTimeout, isListening]);
 
-  // Clear text
   const clearText = useCallback((): void => {
     if (isComponentMountedRef.current) {
       safeSetState(() => {
@@ -335,7 +372,6 @@ export const useVoiceInput = () => {
     }
   }, [safeSetState]);
 
-  // Update text manually (typing)
   const updateInputText = useCallback((text: string) => {
     if (isComponentMountedRef.current) {
       setInputText(text);
@@ -346,23 +382,16 @@ export const useVoiceInput = () => {
   }, []);
 
   return {
-    // State
     inputText,
     isListening,
     voiceInputText,
     shouldFocusPromptInput,
-    
-    // Text management
     setInputText: updateInputText,
     setVoiceInputText,
     setShouldFocusPromptInput,
     clearText,
-    
-    // Voice controls - SIMPLE CLICK TO START/STOP
-    startListening,  // Click microphone = start continuous listening
-    stopListening,   // Click tick/stop = stop and finalize
-    
-    // Aliases
+    startListening,
+    stopListening,
     startVoiceRecording: startListening,
     stopVoiceRecording: stopListening,
     clearVoiceInput: clearText,

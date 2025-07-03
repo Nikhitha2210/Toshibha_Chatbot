@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     View, 
     Text, 
@@ -28,6 +28,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   const [selectedSource, setSelectedSource] = useState<SourceReference | null>(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [currentDisplayIndex, setCurrentDisplayIndex] = useState(1); // Track display index separately
 
   const { state } = useAuth();
 
@@ -35,34 +36,54 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     return null;
   }
 
+  // Filter sources that have URLs and create image array
+  const sourcesWithUrls = sources.filter(source => source.url);
+  const imageUrls = sourcesWithUrls.map(source => ({
+    url: source.url!,
+    props: {
+      headers: {
+        'Authorization': `Bearer ${state.tokens?.access_token}`,
+        'Accept': 'image/png,image/jpeg,image/*',
+        'Cache-Control': 'no-cache'
+      }
+    }
+  }));
+
   const handlePillPress = (source: SourceReference, sourceIndex: number) => {
-    console.log(' === PILL PRESS DEBUG ===');
-    console.log(' Pill pressed for source:', source);
-    console.log(' Source URL:', source.url);
-    console.log(' AWS Link:', source.awsLink);
+    console.log('=== PILL PRESS DEBUG ===');
+    console.log('Pill pressed for source:', source.filename);
+    console.log('Source URL exists:', !!source.url);
+    console.log('Total sources:', sources.length);
+    console.log('Sources with URLs:', sourcesWithUrls.length);
     
     if (source.url) {
-      console.log(' URL exists, opening modal...');
+      // Find the index of this source among sources that have URLs
+      const imageIndex = sourcesWithUrls.findIndex(s => s.awsLink === source.awsLink);
+      
+      console.log('Found image index:', imageIndex);
+      console.log('Setting selectedImageIndex to:', imageIndex);
+      console.log('Display index will be:', imageIndex + 1);
+      
       setSelectedSource(source);
-      // Find the index among sources that have URLs
-      const sourcesWithUrls = sources.filter(s => s.url);
-      const imageIndex = sourcesWithUrls.findIndex(s => s === source);
-      setSelectedImageIndex(Math.max(0, imageIndex));
+      setSelectedImageIndex(imageIndex >= 0 ? imageIndex : 0);
+      setCurrentDisplayIndex(imageIndex + 1); // Set display index
       setImageModalVisible(true);
     } else {
-      console.log(' No URL available for source');
+      console.log('No URL available for source');
       Alert.alert(
         'No Image Available',
         'This source does not have an associated image to display.',
         [{ text: 'OK' }]
       );
     }
-    console.log(' === PILL PRESS DEBUG END ===');
+    console.log('=== PILL PRESS DEBUG END ===');
   };
 
   const closeImageModal = () => {
     setImageModalVisible(false);
     setSelectedSource(null);
+    setSelectedImageIndex(0);
+    setCurrentDisplayIndex(1);
   };
 
   const formatPageText = (pages: string) => {
@@ -75,18 +96,16 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     }
   };
 
-  const imageUrls = sources
-    .filter(source => source.url)
-    .map(source => ({
-      url: source.url!,
-      props: {
-        headers: {
-          'Authorization': `Bearer ${state.tokens?.access_token}`,
-          'Accept': 'image/png,image/jpeg,image/*',
-          'Cache-Control': 'no-cache'
-        }
-      }
-    }));
+  // Update current source when image changes
+  const handleImageChange = (index?: number) => {
+    console.log('Image changed to index:', index);
+    if (index !== undefined && sourcesWithUrls[index]) {
+      const newSource = sourcesWithUrls[index];
+      setSelectedSource(newSource);
+      setCurrentDisplayIndex(index + 1); // Update display index
+      console.log('Updated to source:', newSource.filename, 'Display index:', index + 1);
+    }
+  };
 
   const styles = getStyles(theme);
 
@@ -99,7 +118,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
       >
         {sources.map((source, index) => (
           <TouchableOpacity
-            key={index}
+            key={`${source.awsLink}-${index}`}
             style={[
               styles.pill,
               source.url ? styles.pillClickable : styles.pillDisabled
@@ -112,14 +131,14 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
               <IconAssets.Copy style={styles.documentIcon} />
               <View style={styles.textContainer}>
                 <Text 
-                    selectable={true} // ✅ Enable text selection
+                    selectable={true}
                     style={styles.filename} 
                     numberOfLines={1}
                 >
                   {source.filename}
                 </Text>
                 <Text 
-                    selectable={true} // ✅ Enable text selection
+                    selectable={true}
                     style={styles.pages}
                 >
                   {formatPageText(source.pages)}
@@ -130,7 +149,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
         ))}
       </ScrollView>
 
-      {/* ✅ Full-screen image viewer with proper pinch-to-zoom */}
+      {/* Fixed Image Viewer with Proper Zoom */}
       <Modal
         visible={imageModalVisible}
         transparent={true}
@@ -138,18 +157,18 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
       >
         <StatusBar hidden />
         <View style={styles.imageViewerContainer}>
-          {/* ✅ Header with close button and filename */}
+          {/* Header */}
           <View style={styles.imageViewerHeader}>
             <View style={styles.headerContent}>
               <Text 
-                selectable={true} // ✅ Enable text selection
+                selectable={true}
                 style={styles.imageViewerTitle}
                 numberOfLines={2}
               >
                 {selectedSource?.filename}
               </Text>
               <Text 
-                selectable={true} // ✅ Enable text selection
+                selectable={true}
                 style={styles.imageViewerSubtitle}
               >
                 {selectedSource && formatPageText(selectedSource.pages)}
@@ -160,26 +179,27 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
             </TouchableOpacity>
           </View>
 
-          {/* ✅ Zoomable image viewer with working library */}
+          {/* Fixed Image Counter */}
+          {sourcesWithUrls.length > 1 && (
+            <View style={styles.imageIndicator}>
+              <Text style={styles.imageIndicatorText}>
+                {currentDisplayIndex} / {sourcesWithUrls.length}
+              </Text>
+            </View>
+          )}
+
           {imageUrls.length > 0 && (
             <ImageViewer
               imageUrls={imageUrls}
               index={selectedImageIndex}
               onSwipeDown={closeImageModal}
               enableSwipeDown={true}
-              renderIndicator={(currentIndex?: number, allSize?: number) => {
-                if (!allSize || allSize <= 1) return <></>;
-                return (
-                  <View style={styles.imageIndicator}>
-                    <Text style={styles.imageIndicatorText}>
-                      {(currentIndex || 0) + 1} / {allSize}
-                    </Text>
-                  </View>
-                );
-              }}
+              onChange={handleImageChange}
               enableImageZoom={true}
               doubleClickInterval={250}
               saveToLocalByLongPress={false}
+              // Remove the renderIndicator since we're using our own
+              renderIndicator={() => <></>}
               menuContext={{
                 saveToLocal: 'Save to Photos',
                 cancel: 'Cancel'
@@ -207,6 +227,8 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                 width: 1,
                 height: 1
               }}
+              // Performance optimizations
+              useNativeDriver={true}
             />
           )}
         </View>
@@ -263,7 +285,6 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
     color: theme === 'dark' ? Colors.dark.subText : Colors.light.lightText,
   },
   
-  // ✅ Image viewer styles
   imageViewerContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -312,10 +333,11 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
     position: 'absolute',
     top: 120,
     alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
+    zIndex: 1000,
   },
   imageIndicatorText: {
     color: '#FFFFFF',

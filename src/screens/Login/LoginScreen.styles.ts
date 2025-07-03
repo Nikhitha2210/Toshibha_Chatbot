@@ -6,36 +6,48 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.dark.background2,
     },
+    scrollView: {
+        flex: 1,
+    },
     scrollViewContent: {
         flexGrow: 1,
-        justifyContent: 'space-between',
         paddingHorizontal: 24,
         paddingTop: 20,
+        paddingBottom: 40,
         backgroundColor: Colors.dark.background2,
     },
     wrapper: {
         flex: 1,
         justifyContent: 'center',
-        paddingTop: 60, 
+        minHeight: 600,
     },
     logoWrapper: {
         position: 'absolute',
-        top: 50, 
+        top: 50,
         right: 20,
-        zIndex: 1, 
+        zIndex: 1,
+        alignItems: 'flex-end',
     },
     logo: {
-        height: 40, 
-        width: 96, 
+        height: 40,
+        width: 96,
+    },
+    versionText: {
+        color: Colors.dark.subText,
+        fontSize: 12,
+        marginTop: 4,
+        fontWeight: '400',
+        opacity: 0.7,
     },
     mainWrapper: {
         justifyContent: 'center',
         paddingHorizontal: 0,
-        marginTop: 20, 
+        marginTop: 80,
+        paddingBottom: 20,
     },
     centreText: {
         marginBottom: 60,
-        paddingTop: 20, 
+        paddingTop: 20,
     },
     title: {
         color: Colors.dark.text,
@@ -115,12 +127,31 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
         alignItems: 'center',
         backgroundColor: Colors.dark.background2,
+        marginTop: 'auto',
     },
     footerText: {
         color: Colors.dark.text,
         fontSize: 12,
     },
     footerLink: {
+        color: Colors.dark.primary,
+    },
+    versionFooterText: {
+        color: Colors.dark.subText,
+        fontSize: 10,
+        marginTop: 8,
+        opacity: 0.6,
+        fontWeight: '300',
+    },
+    link: {
+        alignItems: 'center',
+        flex: 1,
+        marginTop: 10
+    },
+    linkText: {
+        textAlign: 'center',
+        fontSize: 16,
+        lineHeight: 24,
         color: Colors.dark.primary,
     },
 });

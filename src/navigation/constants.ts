@@ -3,4 +3,7 @@ export const ROUTE_NAMES = {
     Home: 'Home',
     AiAssist: 'AiAssist',
     Settings: 'Settings',
+    ForgotPassword: 'ForgotPassword',
+    CheckEmail: 'CheckEmail',
+    ResetPassword: 'ResetPassword'
 };
