@@ -1,4 +1,4 @@
-import Logo from './logo.svg';
+import Logo from './toshiba.svg';
 import Lock from './lock.svg';
 import Mail from './Mail.svg';
 import Solid from './Solid.svg';
@@ -24,7 +24,7 @@ import FolderDark from './dark/Folder.svg';
 import StarDark from './dark/Star.svg'
 import SettingsDark from './dark/Settings.svg'
 import FilterDark from './dark/Filter.svg';
-import LogoDark from './dark/Logo.svg';
+import LogoDark from './toshiba.svg';
 import MenuDark from './dark/Menu.svg';
 import ThumbsUpDark from './dark/thumbs-up.svg';
 
@@ -36,7 +36,7 @@ import FolderLight from './light/Folder.svg';
 import StarLight from './light/Star.svg';
 import SettingsLight from './light/Settings.svg';
 import FilterLight from './light/Filter.svg';
-import LogoLight from './light/Logo.svg';
+import LogoLight from './toshiba.svg';
 import MenuLight from './light/Menu.svg';
 import ThumbsUpLight from './light/thumbs-up.svg';
 import ThumbsDownLight from './light/thumbs-down.svg'; 

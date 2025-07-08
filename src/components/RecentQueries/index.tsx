@@ -1,5 +1,5 @@
 import React from 'react'
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { FlatList, Text, TouchableOpacity, View } from 'react-native'
 
 import { usePrompt } from '../../context/PromptContext';
 import { useChat } from '../../context/ChatContext';
@@ -15,12 +15,12 @@ const RecentQueries = () => {
 
     const handleQueryPress = (queryText: string) => {
         try {
-            console.log('🎯 RecentQuery clicked:', queryText);
+            console.log('RecentQuery clicked:', queryText);
             setInputText(queryText);
             if (error) clearError();
-            console.log('✅ Input text set to:', queryText);
+            console.log('Input text set to:', queryText);
         } catch (err) {
-            console.error('❌ Error setting input text:', err);
+            console.error('Error setting input text:', err);
         }
     }
 
@@ -45,6 +45,21 @@ const RecentQueries = () => {
     };
 
     const hasQueries = recentQueries && recentQueries.length > 0;
+
+    const renderQueryItem = ({ item }: { item: any }) => (
+        <TouchableOpacity
+            style={styles.recentCard}
+            onPress={() => handleQueryPress(item.message)}
+            activeOpacity={0.7}
+        >
+            <Text style={styles.recentCardTitle} numberOfLines={2}>
+                {item.message}
+            </Text>
+            <Text style={styles.recentCardSubtitle}>
+                {formatTimeAgo(item.timestamp)}
+            </Text>
+        </TouchableOpacity>
+    );
 
     return (
         <View style={styles.recentQueriesContainer}>
@@ -73,7 +88,10 @@ const RecentQueries = () => {
             )}
 
             {hasQueries ? (
-                <ScrollView
+                <FlatList
+                    data={recentQueries}
+                    renderItem={renderQueryItem}
+                    keyExtractor={(item) => item.id}
                     style={{ flex: 1 }}
                     contentContainerStyle={{ paddingBottom: 10 }}
                     showsVerticalScrollIndicator={true}
@@ -81,23 +99,11 @@ const RecentQueries = () => {
                     scrollEnabled={true}
                     bounces={true}
                     keyboardShouldPersistTaps="handled"
-                >
-                    {recentQueries.map((query) => (
-                        <TouchableOpacity
-                            key={query.id}
-                            style={styles.recentCard}
-                            onPress={() => handleQueryPress(query.message)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.recentCardTitle} numberOfLines={2}>
-                                {query.message}
-                            </Text>
-                            <Text style={styles.recentCardSubtitle}>
-                                {formatTimeAgo(query.timestamp)}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                    removeClippedSubviews={false}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                />
             ) : (
                 <View style={styles.emptyStateContainer}>
                     <Text style={styles.emptyStateText}>

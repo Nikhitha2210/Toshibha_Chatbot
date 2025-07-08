@@ -185,6 +185,7 @@ export class AuthApiClient {
     }
   }
 
+  // ✅ Original resetPassword method (uses /api/auth/change-password)
   async resetPassword(accessToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     try {
       const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/change-password`, {
@@ -206,6 +207,66 @@ export class AuthApiClient {
         throw error;
       }
       throw new Error('An unexpected error occurred while resetting password');
+    }
+  }
+
+  // ✅ NEW: Change password for users (uses /api/auth/change-password-user)
+  async changePasswordUser(accessToken: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/change-password-user`, {
+        method: "POST",
+        headers: this.getHeaders({
+          Authorization: `Bearer ${accessToken}`,
+        }),
+        body: JSON.stringify({ 
+          current_password: currentPassword,
+          new_password: newPassword 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText || 'Failed to change password' };
+        }
+
+        // Handle specific error cases
+        if (response.status === 400 && errorData.detail?.includes('current password')) {
+          throw new Error('Current password is incorrect');
+        }
+        
+        if (response.status === 422) {
+          throw new Error('Invalid password format');
+        }
+
+        throw new Error(errorData.detail || "Failed to change password");
+      }
+
+      return { success: true, message: "Password successfully changed" };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while changing password');
+    }
+  }
+
+  // ✅ Helper method to determine which endpoint to use
+  async changePassword(
+    accessToken: string, 
+    newPassword: string, 
+    currentPassword?: string
+  ): Promise<{ success: boolean; message: string }> {
+    // If currentPassword is provided, use the user change endpoint
+    if (currentPassword) {
+      return this.changePasswordUser(accessToken, currentPassword, newPassword);
+    } else {
+      // Otherwise use the admin/reset endpoint
+      return this.resetPassword(accessToken, newPassword);
     }
   }
 

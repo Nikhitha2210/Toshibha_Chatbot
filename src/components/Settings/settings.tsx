@@ -1,21 +1,14 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ScrollView, Text, FlatList } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Colors from '../../theme/colors';
-
-type RootStackParamList = {
-    Login: undefined;
-    Home: undefined;
-    AiAssist: undefined;
-    Settings: undefined;
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import IconAssets from '../../assets/icons/IconAssets';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ROUTE_NAMES } from '../../navigation/constants';
 
 const SettingsScreen = () => {
-    const navigation = useNavigation<NavigationProp>();
+    const navigation = useNavigation<any>();
     const { logout } = useAuth();
 
     const logoutUser = () => {
@@ -23,30 +16,63 @@ const SettingsScreen = () => {
         navigation.navigate('Login');
     };
 
+    const handleSecurity = () => {
+        navigation.navigate(ROUTE_NAMES.ResetPassword, { fromSettings: true });
+    };
+
     const settingsOptions = [
-        { id: '1', title: 'Logout', action: logoutUser },
+        { id: '1', title: 'Profile', icon: 'person', screen: 'Profile' },
+        { id: '2', title: 'Account', icon: 'settings', screen: 'Account' },
+        { id: '3', title: 'Security', icon: 'lock-closed', action: handleSecurity },
+        { id: '4', title: 'Logout', icon: 'log-out', action: logoutUser },
     ];
 
-    const renderItem = ({ item }: { item: { id: string; title: string; action: () => void } }) => (
-        <TouchableOpacity style={styles.optionButton} onPress={item.action}>
+    const renderItem = ({ item }: { item: any }) => (
+        <TouchableOpacity
+            style={styles.optionButton}
+            onPress={() => {
+                if (item.action) {
+                    item.action();
+                } else if (item.screen) {
+                    navigation.navigate(item.screen);
+                }
+            }}
+        >
+            <Ionicons name={item.icon} size={20} color="#fff" style={styles.icon} />
             <Text style={styles.optionText}>{item.title}</Text>
         </TouchableOpacity>
     );
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.backButtonText}>←</Text>
-            </TouchableOpacity>
+            <ScrollView
+                contentContainerStyle={styles.scrollViewContent}
+                keyboardShouldPersistTaps="handled"
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.wrapper}>
+                    <View style={{ marginBottom: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 8, paddingTop: 25 }}>
+                        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                            <IconAssets.ArrowLeftDark width={24} height={24} />
+                        </TouchableOpacity>
 
-            <Text style={styles.title}>Settings</Text>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                            <IconAssets.Logo style={styles.logo} />
+                        </View>
+                    </View>
 
-            <FlatList
-                data={settingsOptions}
-                renderItem={renderItem}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.list}
-            />
+                    <Text style={styles.sectionTitle}>Account</Text>
+
+                    <FlatList
+                        data={settingsOptions}
+                        renderItem={renderItem}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.list}
+                    />
+
+                </View>
+            </ScrollView>
         </View>
     );
 };
@@ -56,33 +82,47 @@ export default SettingsScreen;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 20,
-        backgroundColor: '#fff',
+        backgroundColor: Colors.dark.background2,
+    },
+    scrollViewContent: {
+        flexGrow: 1,
+        paddingHorizontal: 24,
+        paddingTop: 20,
+    },
+    wrapper: {
+        flex: 1,
+    },
+    logo: {
+        height: 40,
+        width: 96,
     },
     backButton: {
-        marginBottom: 10,
+        marginTop: 10,
+        marginLeft: -8,
     },
-    backButtonText: {
-        fontSize: 36,
-        color: '#1B4965',
-    },
-    title: {
-        fontSize: 24,
-        marginBottom: 20,
+    sectionTitle: {
+        color: '#fff',
+        fontSize: 18,
         fontWeight: 'bold',
+        marginBottom: 16,
     },
     list: {
         paddingBottom: 20,
     },
     optionButton: {
-        backgroundColor: Colors.dark.primary,
-        padding: 15,
-        borderRadius: 8,
-        marginBottom: 12,
+        backgroundColor: Colors.dark.background3,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 12,
+    },
+    icon: {
+        marginRight: 12,
     },
     optionText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 16,
     },
 });

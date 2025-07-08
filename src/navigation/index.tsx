@@ -17,7 +17,7 @@ const Stack = createNativeStackNavigator();
 
 const Navigation = () => {
     const { state, setNavigationRef } = useAuth();
-    
+
     const needsPasswordReset = state.tokens?.password_change_required === true;
 
     return (
@@ -57,6 +57,13 @@ const Navigation = () => {
                             <Stack.Screen
                                 name={ROUTE_NAMES.Settings}
                                 component={SettingsScreen}
+                                options={{
+                                    gestureEnabled: true,
+                                }}
+                            />
+                            <Stack.Screen
+                                name={ROUTE_NAMES.ResetPassword}
+                                component={ResetPassword}
                                 options={{
                                     gestureEnabled: true,
                                 }}
