@@ -34,7 +34,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.2";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');

@@ -21,8 +21,8 @@ const SettingsScreen = () => {
     };
 
     const settingsOptions = [
-        { id: '1', title: 'Profile', icon: 'person', screen: 'Profile' },
-        { id: '2', title: 'Account', icon: 'settings', screen: 'Account' },
+        // { id: '1', title: 'Profile', icon: 'person', screen: 'Profile' },
+        // { id: '2', title: 'Account', icon: 'settings', screen: 'Account' },
         { id: '3', title: 'Security', icon: 'lock-closed', action: handleSecurity },
         { id: '4', title: 'Logout', icon: 'log-out', action: logoutUser },
     ];

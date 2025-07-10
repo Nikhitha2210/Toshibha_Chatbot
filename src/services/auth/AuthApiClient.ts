@@ -211,50 +211,62 @@ export class AuthApiClient {
   }
 
   // ✅ NEW: Change password for users (uses /api/auth/change-password-user)
-  async changePasswordUser(accessToken: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/change-password-user`, {
-        method: "POST",
-        headers: this.getHeaders({
-          Authorization: `Bearer ${accessToken}`,
-        }),
-        body: JSON.stringify({ 
-          current_password: currentPassword,
-          new_password: newPassword 
-        }),
-      });
+ async changePasswordDirect(accessToken: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log('Making direct password change request...');
+    
+    // Try using the original auth server that works
+    const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/change-password`, {
+      method: "POST",
+      headers: this.getHeaders({
+        Authorization: `Bearer ${accessToken}`,
+      }),
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { detail: errorText || 'Failed to change password' };
-        }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('Direct method error response:', errorText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { detail: errorText || 'Failed to change password' };
+      }
 
-        // Handle specific error cases
-        if (response.status === 400 && errorData.detail?.includes('current password')) {
+      if (response.status === 400) {
+        if (errorData.detail?.includes('current password') || errorData.detail?.includes('incorrect')) {
           throw new Error('Current password is incorrect');
         }
-        
-        if (response.status === 422) {
-          throw new Error('Invalid password format');
-        }
-
-        throw new Error(errorData.detail || "Failed to change password");
+      }
+      
+      if (response.status === 422) {
+        throw new Error('Invalid password format');
       }
 
-      return { success: true, message: "Password successfully changed" };
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
+      if (response.status === 401) {
+        throw new Error('Authentication failed. Please log in again.');
       }
-      throw new Error('An unexpected error occurred while changing password');
+
+      throw new Error(errorData.detail || errorData.error || `Password change failed (${response.status})`);
     }
-  }
 
+    const responseData = await response.text();
+    console.log('Direct method success response:', responseData);
+    
+    return { success: true, message: "Password successfully changed" };
+  } catch (error) {
+    console.log('Direct password change error:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('An unexpected error occurred while changing password');
+  }
+}
   // ✅ Helper method to determine which endpoint to use
   async changePassword(
     accessToken: string, 
@@ -263,7 +275,7 @@ export class AuthApiClient {
   ): Promise<{ success: boolean; message: string }> {
     // If currentPassword is provided, use the user change endpoint
     if (currentPassword) {
-      return this.changePasswordUser(accessToken, currentPassword, newPassword);
+      return this.changePassword(accessToken, currentPassword, newPassword);
     } else {
       // Otherwise use the admin/reset endpoint
       return this.resetPassword(accessToken, newPassword);

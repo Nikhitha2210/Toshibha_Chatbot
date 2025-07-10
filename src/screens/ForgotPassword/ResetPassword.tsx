@@ -70,76 +70,82 @@ const ResetPassword = () => {
         }
     }, []);
 
-    const handleConfirm = async () => {
-        clearError();
+   const handleConfirm = async () => {
+    clearError();
 
-        let isValid = true;
+    let isValid = true;
 
+    if (fromSettings) {
+        if (!currentPassword.trim()) {
+            setCurrentPasswordError(true);
+            isValid = false;
+        } else {
+            setCurrentPasswordError(false);
+        }
+    }
+
+    if (!password.trim()) {
+        setPasswordError(true);
+        isValid = false;
+    } else if (password.length < 6) {
+        setPasswordError(true);
+        isValid = false;
+        Alert.alert('Invalid Password', 'Password must be at least 6 characters long.');
+        return;
+    } else {
+        setPasswordError(false);
+    }
+
+    if (!confirmPassword.trim()) {
+        setConfirmPasswordError(true);
+        isValid = false;
+    } else if (password !== confirmPassword) {
+        setConfirmPasswordError(true);
+        isValid = false;
+        Alert.alert('Password Mismatch', 'Passwords do not match.');
+        return;
+    } else {
+        setConfirmPasswordError(false);
+    }
+
+    if (!isValid) {
+        return;
+    }
+
+    try {
+        setIsSubmitting(true);
+        console.log('Starting password change process...');
+
+        let result;
+        
         if (fromSettings) {
-            if (!currentPassword.trim()) {
-                setCurrentPasswordError(true);
-                isValid = false;
-            } else {
-                setCurrentPasswordError(false);
-            }
-        }
-
-        if (!password.trim()) {
-            setPasswordError(true);
-            isValid = false;
-        } else if (password.length < 6) {
-            setPasswordError(true);
-            isValid = false;
-            Alert.alert('Invalid Password', 'Password must be at least 6 characters long.');
-            return;
+            console.log('Using changePasswordUser method');
+            result = await changePasswordUser(currentPassword, password);
         } else {
-            setPasswordError(false);
+            console.log('Using resetPassword method');
+            result = await resetPassword(password);
         }
 
-        if (!confirmPassword.trim()) {
-            setConfirmPasswordError(true);
-            isValid = false;
-        } else if (password !== confirmPassword) {
-            setConfirmPasswordError(true);
-            isValid = false;
-            Alert.alert('Password Mismatch', 'Passwords do not match.');
-            return;
+        if (result.success) {
+            console.log('Password change successful');
+            setShowSuccessDialog(true);
+        }
+    } catch (error) {
+        console.log('Password change failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to change password';
+        
+        if (errorMessage.includes('Current password is incorrect') || errorMessage.includes('incorrect')) {
+            setCurrentPasswordError(true);
+            Alert.alert('Incorrect Password', 'Your current password is incorrect.');
+        } else if (errorMessage.includes('Authentication failed')) {
+            Alert.alert('Session Expired', 'Please log in again.');
         } else {
-            setConfirmPasswordError(false);
+            Alert.alert('Reset Failed', errorMessage);
         }
-
-        if (!isValid) {
-            return;
-        }
-
-        try {
-            setIsSubmitting(true);
-
-            let result;
-            
-            if (fromSettings) {
-                result = await changePasswordUser(currentPassword, password);
-            } else {
-                result = await resetPassword(password);
-            }
-
-            if (result.success) {
-                setShowSuccessDialog(true);
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
-            
-            if (errorMessage.includes('Current password is incorrect')) {
-                setCurrentPasswordError(true);
-                Alert.alert('Incorrect Password', 'Your current password is incorrect.');
-            } else {
-                Alert.alert('Reset Failed', errorMessage);
-            }
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
+    } finally {
+        setIsSubmitting(false);
+    }
+};
     return (
         <>
             <RN_SafeAreaView style={{ flex: 1 }}>

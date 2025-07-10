@@ -1,6 +1,6 @@
 const Colors = {
     light: {
-        primary: '#FF681F',
+        primary: '#E61E1E',
         background: '#FFFFFF',
         background2: '#F8FAFC',
         stroke: '#E2E8ED',
@@ -14,7 +14,7 @@ const Colors = {
     },
 
     dark: {
-        primary: '#FF681F',
+        primary: '#E61E1E',
         background: '#161616',
         background2: '#282828',
         background3: '#1A1A1A',
