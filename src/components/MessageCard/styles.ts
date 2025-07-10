@@ -91,19 +91,19 @@ export const getStyles = (theme: 'light' | 'dark') => {
             gap: 10
         },
         statusContainer: {
-            backgroundColor: 'rgba(255, 106, 0, 0.1)',
+            backgroundColor: 'rgba(230, 30, 30, 0.1)',
             padding: 8,
             borderRadius: 6,
             marginBottom: 10,
             borderLeftWidth: 3,
-            borderLeftColor: '#FF6A00',
+            borderLeftColor: '#E61E1E',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
         },
         statusText: {
             fontStyle: 'italic',
-            color: '#FF6A00',
+            color: '#E61E1E',
             fontSize: 13,
             flex: 1,
         },
@@ -116,7 +116,7 @@ export const getStyles = (theme: 'light' | 'dark') => {
             width: 6,
             height: 6,
             borderRadius: 3,
-            backgroundColor: '#FF6A00',
+            backgroundColor: '#E61E1E',
         },
     })
 }

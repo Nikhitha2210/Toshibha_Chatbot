@@ -17,7 +17,7 @@ const ThemeToggle = () => {
         <Feather
           name={isDark ? 'moon' : 'sun'}
           size={12}
-          color={isDark ? '#FF6A00' : '#FF6A00'}
+          color={isDark ? '#E61E1E' : '#E61E1E'}
         />
       </View>
     </TouchableOpacity>

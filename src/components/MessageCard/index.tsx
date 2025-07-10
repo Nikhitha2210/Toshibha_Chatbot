@@ -45,7 +45,7 @@ const TypingDots = () => {
                     key={i}
                     style={{
                         fontSize: 20,
-                        color: '#FF6A00',
+                        color: '#E61E1E',
                         marginHorizontal: 2,
                         opacity: 0.3 + (i * 0.3),
                     }}
@@ -164,9 +164,9 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
             marginVertical: 8,
         },
         blockquote: {
-            backgroundColor: theme === 'dark' ? 'rgba(255, 106, 0, 0.05)' : 'rgba(255, 106, 0, 0.02)',
+            backgroundColor: theme === 'dark' ? 'rgba(230, 30, 30, 0.05)' : 'rgba(230, 30, 30, 0.02)', 
             borderLeftWidth: 4,
-            borderLeftColor: '#FF6A00',
+            borderLeftColor: '#E61E1E',
             paddingLeft: 12,
             paddingVertical: 8,
             marginVertical: 8,
@@ -181,7 +181,7 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
             fontStyle: 'italic' as const,
         },
         link: {
-            color: '#FF6A00',
+            color: '#E61E1E',
             textDecorationLine: 'underline' as const,
         },
         hr: {
@@ -333,7 +333,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                 <TouchableOpacity 
                     onLongPress={handleCopyUserMessage}
                     style={{
-                        backgroundColor: '#FF6A00',
+                        backgroundColor: '#E61E1E',
                         borderRadius: 15,
                         borderBottomRightRadius: 5,
                         padding: 12,
@@ -398,23 +398,23 @@ const MessageCard: React.FC<MessageCardProps> = ({
 
             {isStreaming && agentStatus && (
                 <View style={{
-                    backgroundColor: 'rgba(255, 106, 0, 0.1)',
+                    backgroundColor: 'rgba(230, 30, 30, 0.1)',
                     padding: 8,
                     borderRadius: 6,
                     marginBottom: 10,
                     borderLeftWidth: 3,
-                    borderLeftColor: '#FF6A00'
+                    borderLeftColor: '#E61E1E'
                 }}>
                     <Text 
                         selectable={true}
                         style={[styles.messageText, {
                             fontStyle: 'italic',
-                            color: '#FF6A00',
+                            color: '#E61E1E',
                             fontSize: 13
                         }]}
                     >
                         {agentStatus}
-                        {isStreaming && <Text style={{ color: '#FF6A00' }}>...</Text>}
+                        {isStreaming && <Text style={{ color: '#E61E1E' }}>...</Text>}
                     </Text>
                 </View>
             )}
@@ -442,7 +442,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                             ]}
                         >
                             {message}
-                            {isStreaming && !agentStatus && <Text style={{ color: '#FF6A00' }}>|</Text>}
+                            {isStreaming && !agentStatus && <Text style={{ color: '#E61E1E' }}>|</Text>}
                         </Text>
                     ) : (
                         <MessageRenderer text={message} theme={theme} />
@@ -457,7 +457,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
             {isErrorMessage && (
                 <TouchableOpacity
                     style={{
-                        backgroundColor: '#FF6A00',
+                        backgroundColor: '#E61E1E',
                         padding: 8,
                         borderRadius: 6,
                         marginTop: 8,

@@ -209,7 +209,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
 
                     {isListening && (
                         <View style={{
-                            backgroundColor: 'rgba(255, 104, 31, 0.95)',
+                            backgroundColor: 'rgba(230, 30, 30, 0.95)',
                             paddingHorizontal: 12,
                             paddingVertical: 6,
                             borderRadius: 15,
@@ -230,7 +230,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose, harmful
                     <TextInput
                         style={[
                             styles.feedbackInput,
-                            isListening && { borderColor: '#FF681F', borderWidth: 2 }
+                            isListening && { borderColor: '#E61E1E', borderWidth: 2 }
                         ]}
                         placeholder="What was the issue with the response? How could it be improved?"
                         placeholderTextColor="#aaa"

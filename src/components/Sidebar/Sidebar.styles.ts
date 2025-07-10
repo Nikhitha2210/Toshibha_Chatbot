@@ -23,7 +23,7 @@ export const getStyles = (theme: 'light' | 'dark') => {
             paddingTop: 20
         },
         advanceSearchText: {
-            color: '#FF6A00',
+            color: '#E61E1E',
             marginBottom: 20,
             textDecorationLine: 'underline',
             fontSize: 16,

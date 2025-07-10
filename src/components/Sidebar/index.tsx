@@ -175,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, slideAnim, onClose }) => {
                                     ]}
                                 />
                             </TouchableOpacity>
-                            {ThemedFilterIcon && <ThemedFilterIcon style={styles.myQueriesIcon} />}
+                            {/* {ThemedFilterIcon && <ThemedFilterIcon style={styles.myQueriesIcon} />} */}
                         </View>
                     </View>
 
