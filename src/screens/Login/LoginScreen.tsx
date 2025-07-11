@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Image, 
   Keyboard, 
@@ -13,10 +13,13 @@ import {
   Alert, 
   ActivityIndicator, 
   Pressable,
-  SafeAreaView
+  SafeAreaView as RN_SafeAreaView,
+  Dimensions,
+  BackHandler
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import styles from './LoginScreen.styles';
 import Colors from '../../theme/colors';
@@ -34,7 +37,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const APP_VERSION = "1.0.2";
+const APP_VERSION = "1.0.3";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -42,9 +45,33 @@ const LoginScreen = () => {
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [androidVersion, setAndroidVersion] = useState(0);
 
   const navigation = useNavigation<NavigationProp>();
   const { login, state, clearError } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      setAndroidVersion(parseInt(Platform.Version.toString(), 10));
+    }
+    
+    if (Platform.OS === 'android' && parseInt(Platform.Version.toString(), 10) >= 33) {
+      const showListener = Keyboard.addListener('keyboardDidShow', (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      });
+      const hideListener = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardHeight(0);
+      });
+      return () => {
+        showListener.remove();
+        hideListener.remove();
+      };
+    }
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -56,6 +83,7 @@ const LoginScreen = () => {
   );
 
   const handleSignIn = async () => {
+    Keyboard.dismiss();
     clearError();
 
     let isValid = true;
@@ -118,22 +146,23 @@ const LoginScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <RN_SafeAreaView style={{ flex: 1 }}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
-            contentContainerStyle={styles.scrollViewContent}
+            contentContainerStyle={[
+              styles.scrollViewContent,
+              Platform.OS === 'android' && androidVersion >= 33
+                ? { paddingBottom: keyboardHeight + insets.bottom + 50 }
+                : { paddingBottom: insets.bottom + 50 }
+            ]}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+            keyboardDismissMode="interactive"
             bounces={true}
             showsVerticalScrollIndicator={true}
             scrollEnabled={true}
-            nestedScrollEnabled={false}
           >
             <LoginContent
               email={email}
@@ -151,20 +180,31 @@ const LoginScreen = () => {
               state={state}
               clearError={clearError}
               version={APP_VERSION}
+              passwordInputRef={passwordInputRef}
+              scrollViewRef={scrollViewRef}
             />
           </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+      </TouchableWithoutFeedback>
+    </RN_SafeAreaView>
   );
 };
 
 const LoginContent = ({
   email, setEmail, password, setPassword, emailError, setEmailError,
   passwordError, setPasswordError, showPassword, setShowPassword,
-  handleSignIn, handleGoogleSignIn, state, clearError, version
+  handleSignIn, handleGoogleSignIn, state, clearError, version,
+  passwordInputRef, scrollViewRef
 }: any) => {
   const navigation = useNavigation<any>();
+
+  const handleEmailSubmit = () => {
+    passwordInputRef.current?.focus();
+  };
+
+  const handlePasswordSubmit = () => {
+    handleSignIn();
+  };
   
   return (
     <>
@@ -195,12 +235,16 @@ const LoginContent = ({
                 setEmailError(false);
                 clearError();
               }}
+              onSubmitEditing={handleEmailSubmit}
+              returnKeyType="next"
+              blurOnSubmit={false}
             />
           </View>
 
           <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>
             <IconAssets.Lock style={styles.inputIcon} />
             <TextInput
+              ref={passwordInputRef}
               style={[styles.input, { flex: 1 }]}
               placeholder="Password"
               placeholderTextColor={Colors.dark.subText}
@@ -213,7 +257,8 @@ const LoginContent = ({
                 setPasswordError(false);
                 clearError();
               }}
-              onSubmitEditing={handleSignIn}
+              onSubmitEditing={handlePasswordSubmit}
+              returnKeyType="done"
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
