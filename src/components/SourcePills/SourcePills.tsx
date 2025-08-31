@@ -28,13 +28,24 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   const [selectedSource, setSelectedSource] = useState<SourceReference | null>(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [currentDisplayIndex, setCurrentDisplayIndex] = useState(1); // Track display index separately
+  const [currentDisplayIndex, setCurrentDisplayIndex] = useState(1);
+  const [allGroupSources, setAllGroupSources] = useState<SourceReference[]>([]);
 
   const { state } = useAuth();
 
   if (!sources || sources.length === 0) {
     return null;
   }
+
+  // Group sources by filename
+  const groupedSources = sources.reduce((acc, source, index) => {
+    const key = source.filename;
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push({ ...source, originalIndex: index });
+    return acc;
+  }, {} as Record<string, (SourceReference & { originalIndex: number })[]>);
 
   // Filter sources that have URLs and create image array
   const sourcesWithUrls = sources.filter(source => source.url);
@@ -49,27 +60,32 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     }
   }));
 
-  const handlePillPress = (source: SourceReference, sourceIndex: number) => {
+  const handlePillPress = (source: SourceReference, groupSources: (SourceReference & { originalIndex: number })[]) => {
     console.log('=== PILL PRESS DEBUG ===');
     console.log('Pill pressed for source:', source.filename);
+    console.log('Group sources count:', groupSources.length);
     console.log('Source URL exists:', !!source.url);
     console.log('Total sources:', sources.length);
     console.log('Sources with URLs:', sourcesWithUrls.length);
     
-    if (source.url) {
-      // Find the index of this source among sources that have URLs
-      const imageIndex = sourcesWithUrls.findIndex(s => s.awsLink === source.awsLink);
+    // Get all sources from this group that have URLs
+    const groupSourcesWithUrls = groupSources.filter(s => s.url);
+    
+    if (groupSourcesWithUrls.length > 0) {
+      // Find the index of the first source from this group among all sources that have URLs
+      const imageIndex = sourcesWithUrls.findIndex(s => s.awsLink === groupSourcesWithUrls[0].awsLink);
       
       console.log('Found image index:', imageIndex);
       console.log('Setting selectedImageIndex to:', imageIndex);
       console.log('Display index will be:', imageIndex + 1);
       
-      setSelectedSource(source);
+      setSelectedSource(groupSourcesWithUrls[0]);
+      setAllGroupSources(groupSourcesWithUrls);
       setSelectedImageIndex(imageIndex >= 0 ? imageIndex : 0);
-      setCurrentDisplayIndex(imageIndex + 1); // Set display index
+      setCurrentDisplayIndex(imageIndex + 1);
       setImageModalVisible(true);
     } else {
-      console.log('No URL available for source');
+      console.log('No URL available for any source in group');
       Alert.alert(
         'No Image Available',
         'This source does not have an associated image to display.',
@@ -82,6 +98,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   const closeImageModal = () => {
     setImageModalVisible(false);
     setSelectedSource(null);
+    setAllGroupSources([]);
     setSelectedImageIndex(0);
     setCurrentDisplayIndex(1);
   };
@@ -102,7 +119,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     if (index !== undefined && sourcesWithUrls[index]) {
       const newSource = sourcesWithUrls[index];
       setSelectedSource(newSource);
-      setCurrentDisplayIndex(index + 1); // Update display index
+      setCurrentDisplayIndex(index + 1);
       console.log('Updated to source:', newSource.filename, 'Display index:', index + 1);
     }
   };
@@ -116,16 +133,16 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.pillsContainer}
       >
-        {sources.map((source, index) => (
+        {Object.entries(groupedSources).map(([filename, groupSources]) => (
           <TouchableOpacity
-            key={`${source.awsLink}-${index}`}
+            key={filename}
             style={[
               styles.pill,
-              source.url ? styles.pillClickable : styles.pillDisabled
+              groupSources[0].url ? styles.pillClickable : styles.pillDisabled
             ]}
-            onPress={() => handlePillPress(source, index)}
-            activeOpacity={source.url ? 0.7 : 1}
-            disabled={!source.url}
+            onPress={() => handlePillPress(groupSources[0], groupSources)}
+            activeOpacity={groupSources[0].url ? 0.7 : 1}
+            disabled={!groupSources[0].url}
           >
             <View style={styles.pillContent}>
               <IconAssets.Copy style={styles.documentIcon} />
@@ -135,13 +152,14 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                     style={styles.filename} 
                     numberOfLines={1}
                 >
-                  {source.filename}
+                  {filename}
                 </Text>
                 <Text 
                     selectable={true}
                     style={styles.pages}
                 >
-                  {formatPageText(source.pages)}
+                  {formatPageText(groupSources[0].pages)}
+                  {groupSources.length > 1 && ` +${groupSources.length - 1} more`}
                 </Text>
               </View>
             </View>
@@ -198,7 +216,6 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
               enableImageZoom={true}
               doubleClickInterval={250}
               saveToLocalByLongPress={false}
-              // Remove the renderIndicator since we're using our own
               renderIndicator={() => <></>}
               menuContext={{
                 saveToLocal: 'Save to Photos',
@@ -227,7 +244,6 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                 width: 1,
                 height: 1
               }}
-              // Performance optimizations
               useNativeDriver={true}
             />
           )}

@@ -10,7 +10,21 @@ import {
     safeFetch,
     testNetworkConnections
 } from '../config/environment';
+import { getUserAgentHeaders, logUserAgent } from '../utils/userAgentUtils';
+import { AuthApiClient } from '../services/auth/AuthApiClient'; 
+const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
 
+const logMobileAppStart = async () => {
+    try {
+        const headers = await getUserAgentHeaders();
+        console.log('🚀 TOSHIBA MOBILE APP STARTED');
+        console.log('📱 User-Agent:', headers['User-Agent']);
+        console.log('📱 Platform: Android React Native');
+        console.log('📱 App Version: 1.0.8');
+    } catch (error) {
+        console.log('📱 Mobile app started (fallback)');
+    }
+};
 const uuidv4 = () => uuid.v4() as string;
 const APP_SESSION_ID = uuidv4(); // Pure UUID format
 
@@ -145,6 +159,7 @@ type ChatContextType = {
     hasSessionContent: (sessionMessages: ChatMessage[]) => boolean;
     extractSourcesFromText: (text: string) => SourceReference[];
     cleanMessageText: (text: string, sources: SourceReference[]) => string;
+     extendSessionOnActivity: () => Promise<void>;
 };
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
@@ -253,6 +268,18 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [getCurrentUserId, hasSessionContent]);
 
+    // Add this inside ChatProvider, near other useCallback functions
+const extendSessionOnActivity = useCallback(async () => {
+  if (authContext.state.tokens?.access_token) {
+    try {
+      await authApiClient.extendSession(authContext.state.tokens.access_token);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
+        authContext.logout();
+      }
+    }
+  }
+}, [authContext]);
     const fetchChatHistoryFromBackend = useCallback(async (): Promise<ChatSession[]> => {
         try {
             console.log(' Fetching chat history from backend...');
@@ -1098,6 +1125,7 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
 }, []);
 
 const sendMessage = useCallback(async (text: string) => {
+    await extendSessionOnActivity();
     if (!text.trim() || isLoading) {
         console.log('⏭️ Skipping send - empty text or already loading');
         return;
@@ -1249,7 +1277,7 @@ const sendMessage = useCallback(async (text: string) => {
 
                 try {
                     const statusController = new AbortController();
-                    const statusTimeoutId = setTimeout(() => statusController.abort(), 5000);
+                    const statusTimeoutId = setTimeout(() => statusController.abort(), 1800000);
                     
                     const statusResponse = await safeFetch(statusUrl, {
                         signal: statusController.signal
@@ -1300,13 +1328,17 @@ const sendMessage = useCallback(async (text: string) => {
             isRequestCancelled = true;
             abortController.abort();
         });
-
+        const userAgentHeaders = await getUserAgentHeaders();
         const response = await safeApiCall(async () => {
             const res = await safeFetch(chatUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
+                    'X-Client-Source': 'ToshibaChatbot-Mobile',
+                    'X-Request-Type': 'chat-message',
+                    'X-Platform': 'Android',
+                    ...userAgentHeaders,
                 },
                 body: JSON.stringify(requestBody),
                 signal: abortController.signal
@@ -1446,7 +1478,9 @@ const sendMessage = useCallback(async (text: string) => {
 ]);
 
 const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 'downvote') => {
+    
   try {
+    await extendSessionOnActivity();
     console.log(` Submitting ${voteType} for message`);
 
     const isSessionValid = await authContext.validateSessionBeforeRequest();
@@ -1474,13 +1508,18 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
     };
 
     console.log('Vote payload:', JSON.stringify(votePayload, null, 2));
-
+    
+    const userAgentHeaders = await getUserAgentHeaders();
     const response = await safeFetch(voteUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json',
+        'X-Client-Source': 'ToshibaChatbot-Mobile',
+        'X-Request-Type': 'vote',
+        'X-Platform': 'Android',
+        ...userAgentHeaders,
       },
       body: JSON.stringify(votePayload),
     });
@@ -1517,6 +1556,7 @@ const submitVote = useCallback(async (messageText: string, voteType: 'upvote' | 
 
 const submitFeedback = useCallback(async (messageText: string, feedback: any) => {
     try {
+        await extendSessionOnActivity();
         console.log(' Submitting feedback for message');
 
         const isSessionValid = await authContext.validateSessionBeforeRequest();
@@ -1553,13 +1593,17 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         };
 
         console.log(' Feedback request body:', JSON.stringify(requestBody, null, 2));
-
+        const userAgentHeaders = await getUserAgentHeaders();
         const response = await safeFetch(feedbackUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
+                'X-Client-Source': 'ToshibaChatbot-Mobile',
+                'X-Request-Type': 'feedback', 
+                'X-Platform': 'Android',
+                ...userAgentHeaders,
             },
             body: JSON.stringify(requestBody),
         });
@@ -1721,6 +1765,12 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         }
     }, [authContext.state.isAuthenticated]);
 
+
+    useEffect(() => {
+        logMobileAppStart(); // Log User-Agent for debugging
+    }, []);
+
+
     useEffect(() => {
         return () => {
             if (autoSaveTimerRef.current) {
@@ -1730,6 +1780,7 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
                 clearInterval(statusPollingRef.current);
             }
         };
+        
     }, []);
 
     return (
@@ -1761,6 +1812,7 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         hasSessionContent,
         extractSourcesFromText,
         cleanMessageText,
+        extendSessionOnActivity,
     }}>
         {children}
     </ChatContext.Provider>

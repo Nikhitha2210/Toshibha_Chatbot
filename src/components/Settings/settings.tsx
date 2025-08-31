@@ -20,11 +20,16 @@ const SettingsScreen = () => {
         navigation.navigate(ROUTE_NAMES.ResetPassword, { fromSettings: true });
     };
 
+    const handleAuthentication = () => {
+        navigation.navigate(ROUTE_NAMES.MFASettings);
+    }
+
     const settingsOptions = [
         // { id: '1', title: 'Profile', icon: 'person', screen: 'Profile' },
         // { id: '2', title: 'Account', icon: 'settings', screen: 'Account' },
         { id: '3', title: 'Security', icon: 'lock-closed', action: handleSecurity },
         { id: '4', title: 'Logout', icon: 'log-out', action: logoutUser },
+        // { id: '5', title: 'Authentication', icon: 'shield-checkmark', action: handleAuthentication },
     ];
 
     const renderItem = ({ item }: { item: any }) => (

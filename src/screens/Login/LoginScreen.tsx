@@ -33,11 +33,12 @@ type RootStackParamList = {
   Login: undefined;
   Home: undefined;
   ForgotPassword: undefined;
+  OTPScreen: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const APP_VERSION = "1.0.3";
+const APP_VERSION = "1.0.8";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -49,7 +50,7 @@ const LoginScreen = () => {
   const [androidVersion, setAndroidVersion] = useState(0);
 
   const navigation = useNavigation<NavigationProp>();
-  const { login, state, clearError } = useAuth();
+  const { login, state, clearError } = useAuth(); 
   const scrollViewRef = useRef<ScrollView>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
@@ -110,8 +111,7 @@ const LoginScreen = () => {
     }
 
     try {
-      await login(email.trim(), password);
-      navigation.replace('Home');
+      await login(email.trim(), password); 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       let displayMessage = '';
@@ -125,6 +125,10 @@ const LoginScreen = () => {
           setEmailError(true);
           setPasswordError(true);
           break;
+        case 'MFA_REQUIRED_EMAIL':
+        case 'MFA_REQUIRED_TOTP':
+          // Don't show alert - user is being navigated to OTP screen
+          return;
         default:
           if (errorMessage.includes('timed out') || errorMessage.includes('Could not connect')) {
             displayMessage = 'Cannot connect to server. Please check your internet connection and try again.';
@@ -300,8 +304,8 @@ const LoginContent = ({
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Copyright 2025–2026  •{' '}
-          <Text style={styles.footerLink}>iOPEX Technologies</Text>
+          Toshiba Global Commerce Solutions Field Service Assistant  •{' '}
+          <Text style={styles.footerLink}> Powered by iOPEX ©2025 </Text>
         </Text>
       </View>
     </>

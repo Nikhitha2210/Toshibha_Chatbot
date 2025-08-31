@@ -241,6 +241,12 @@ const ResetPassword = () => {
                                             <IconAssets.EyeOff width={20} height={20} />
                                         </TouchableOpacity>
                                     </View>
+                                    {/* Password Requirements Display */}
+                                    <View style={styles.passwordRequirements}>
+                                        <Text style={styles.requirementsText}>
+                                            Password must contain: 9 characters minimum, one symbol, one capital, one number
+                                        </Text>
+                                    </View>
                                 </View>
 
                                 <View style={styles.inputContainer}>
@@ -407,6 +413,14 @@ const styles = StyleSheet.create({
         minHeight: 40,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    passwordRequirements: {
+        marginTop: 8,
+    },
+    requirementsText: {
+        color: Colors.dark.subText,
+        fontSize: 12,
+        lineHeight: 16,
     },
     button: {
         backgroundColor: Colors.dark.primary,

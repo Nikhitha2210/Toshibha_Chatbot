@@ -4,6 +4,15 @@ export interface TokenResponse {
   token_type: string;
   expires_in?: number;
   password_change_required?: boolean;
+   grace_period?: {
+    in_grace_period: boolean;
+    days_remaining: number;
+    grace_period_days: number;
+    expires_at?: string;
+    auto_enable_at?: string;
+    auto_enable_method: string;
+    error?: string;
+  };
 }
 
 export interface UserDetailResponse {
@@ -15,6 +24,15 @@ export interface UserDetailResponse {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+  status?: string;
+  last_login?: string | null;
+  application_admin?: boolean;
+  is_password_temporary?: boolean;
+  sms_mfa_enabled?: boolean;
+  phone_verified?: boolean;
+  phone_number?: string;
+  email_mfa_enabled?: boolean;
+  mfa_enabled?: boolean;
 }
 
 export interface LoginRequest {
@@ -34,7 +52,7 @@ export interface RefreshTokenRequest {
 
 export interface AuthError {
   detail: string;
-  type?: 'email_not_verified' | 'invalid_credentials' | 'password_change_required';
+  type?: 'email_not_verified' | 'invalid_credentials' | 'password_change_required' | 'mfa_required';
 }
 
 export interface AuthState {
@@ -43,4 +61,11 @@ export interface AuthState {
   user: UserDetailResponse | null;
   tokens: TokenResponse | null;
   error: string | null;
+  // OTP-related state
+  pendingOtpCredentials: { email: string; password: string } | null;
+}
+
+export interface EmailMFAResponse {
+  message: string;
+  email?: string;
 }

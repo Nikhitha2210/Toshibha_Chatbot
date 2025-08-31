@@ -132,6 +132,7 @@ const styles = StyleSheet.create({
     footerText: {
         color: Colors.dark.text,
         fontSize: 12,
+        textAlign: 'center'
     },
     footerLink: {
         color: Colors.dark.primary,

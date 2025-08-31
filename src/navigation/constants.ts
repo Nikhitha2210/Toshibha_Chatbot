@@ -5,5 +5,9 @@ export const ROUTE_NAMES = {
     Settings: 'Settings',
     ForgotPassword: 'ForgotPassword',
     CheckEmail: 'CheckEmail',
-    ResetPassword: 'ResetPassword'
+    ResetPassword: 'ResetPassword',
+    MFASettings: 'MFASettings',
+    OTPScreen: 'OTPScreen',
+    AuthenticatorScreen: 'AuthenticatorScreen',
+    AlternativeMFAScreen: 'AlternativeMFAScreen'
 };

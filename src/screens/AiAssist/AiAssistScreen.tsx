@@ -160,7 +160,7 @@ const AiAssistScreen = () => {
                 <Header onMenuPress={openMenu} />
 
                 <View style={styles.topBar}>
-                    <Text style={styles.topBarTitle}>Ask Toshiba</Text>
+                    <Text style={styles.topBarTitle}>Toshiba Field Service Assistant</Text>
                     <TouchableOpacity
                         onPress={handleNewChat}
                         style={styles.newChatButton}
