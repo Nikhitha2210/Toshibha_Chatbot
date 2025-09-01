@@ -55,6 +55,7 @@ export interface ChatSession {
     userId: string;
     creationDate: string;
     label?: string;
+    srNumber?: string;
 }
 
 export interface RecentQuery {
@@ -114,6 +115,7 @@ interface SessionObject {
         sessionMessageLengthOnLastUpdate?: number;
         isExpectingDisplay?: boolean;
     };
+    srNumber?: string;
 }
 
 interface WebAppChatMessageObject {
@@ -142,6 +144,8 @@ type ChatContextType = {
     sendMessage: (text: string) => Promise<void>;
     submitVote: (messageText: string, voteType: 'upvote' | 'downvote') => Promise<void>;
     submitFeedback: (messageText: string, feedback: any) => Promise<void>;
+    submitSRTicket: (sessionId: string, srNumber: string) => Promise<void>; // ← Add this
+
     isLoading: boolean;
     startNewSession: () => void;
     loadSession: (sessionId: string) => void;
@@ -222,6 +226,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         return hasUserMessage && hasAIMessage;
     }, []);
+
+
 
     const cleanupEmptySessions = useCallback(async () => {
         try {
@@ -488,12 +494,14 @@ const extendSessionOnActivity = useCallback(async () => {
         }
 
         const backendSessions: SessionObject[] = await response.json();
+        console.log('🔍 Backend sessions response:', JSON.stringify(backendSessions, null, 2));
 
         const convertedSessions: ChatSession[] = backendSessions.map((session: SessionObject) => ({
             id: session.id,
             title: session.label || `Session ${new Date(session.creationDate).toLocaleDateString()}`,
             timestamp: session.creationDate,
             creationDate: session.creationDate,
+            srNumber: session.srNumber,
             messages: session.messages.map((msg: WebAppChatMessageObject) => {
                 let messageText = msg.text;
                 let sources: SourceReference[] = [];
@@ -531,123 +539,10 @@ const extendSessionOnActivity = useCallback(async () => {
     }
 }, [authContext, getCurrentUserId, hasSessionContent]); 
 
-    const saveSessionToBackend = useCallback(async (session: ChatSession) => {
-        try {
-            console.log(' Saving session to backend database (Web App Compatible)...');
-
-            const token = authContext.state.tokens?.access_token;
-            const userId = getCurrentUserId();
-
-            if (!token) {
-                console.log(' No token for backend session save');
-                return false;
-            }
-
-            const webAppSession: SessionObject = {
-    id: session.id,
-    label: session.title,
-    creationDate: session.creationDate || session.timestamp,
-    messages: session.messages.map(msg => ({
-        id: msg.id,
-        userName: getCurrentUserId(), 
-        isBot: !msg.isUser,
-        date: new Date().toISOString(),
-        text: msg.message,
-        vote: msg.hasVoted ? (msg.voteType === 'upvote' ? 1 : (msg.voteType === 'downvote' ? -1 : 0)) : 0,
-        feedback: msg.feedback || '',
-        feedbackfiles: undefined,
-        files: undefined,
-        media: undefined,
-        isStreaming: false,
-        sources: msg.sources || [] // ← Add sources
-    }))
-};
-
-            console.log(' Web App Session Format:', JSON.stringify(webAppSession, null, 2));
-
-            const possibleSaveUrls = [
-                'https://tgcsbe.iopex.ai/api/sessions',
-                'https://tgcsbe.iopex.ai/sessions',
-                'https://tgcsbe.iopex.ai/api/chat/sessions',
-                'https://tgcsbe.iopex.ai/chat/sessions',
-                'https://tgcsbe.iopex.ai/api/chat/save-session',
-                'https://tgcsbe.iopex.ai/chat/save-session',
-                'https://tgcsbe.iopex.ai/saveSession',
-                'https://tgcsbe.iopex.ai/api/saveSession',
-                'https://tgcsbe.iopex.ai/api/conversations',
-                'https://tgcsbe.iopex.ai/conversations',
-                'https://tgcsbe.iopex.ai/api/user-sessions',
-                'https://tgcsbe.iopex.ai/user-sessions',
-            ];
-
-            const payloadFormats = [
-                webAppSession,
-                { session: webAppSession },
-                {
-                    userId: userId,
-                    session: webAppSession
-                },
-                {
-                    sessionId: session.id,
-                    userId: userId,
-                    label: session.title,
-                    creationDate: session.creationDate || session.timestamp,
-                    messages: webAppSession.messages
-                },
-                {
-                    id: session.id,
-                    user_id: userId,
-                    session_name: session.title,
-                    created_at: session.creationDate || session.timestamp,
-                    updated_at: new Date().toISOString(),
-                    messages: webAppSession.messages
-                }
-            ];
-
-            for (const url of possibleSaveUrls) {
-                for (let i = 0; i < payloadFormats.length; i++) {
-                    try {
-                        console.log(`🔍 Testing session save: ${url} with format ${i + 1}`);
-
-                        const response = await safeFetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`,
-                                'Accept': 'application/json',
-                            },
-                            body: JSON.stringify(payloadFormats[i])
-                        });
-
-                        console.log(` ${url} - Status: ${response.status}`);
-
-                        if (response.ok) {
-                            const responseText = await response.text();
-                            console.log(` Session saved to backend: ${url} with format ${i + 1}`);
-                            console.log(` Save response:`, responseText.substring(0, 300));
-                            return true;
-                        } else if (response.status === 404) {
-                            console.log(` ${url} - Not found (404)`);
-                        } else if (response.status === 401) {
-                            console.log(` ${url} - Unauthorized (401)`);
-                        } else {
-                            const errorText = await response.text();
-                            console.log(` ${url} - Error: ${response.status} - ${errorText.substring(0, 100)}`);
-                        }
-                    } catch (error) {
-                        console.log(` ${url} - Exception:`, error);
-                    }
-                }
-            }
-
-            console.log(' No working session save endpoint found');
-            return false;
-
-        } catch (error) {
-            console.error(' Failed to save session to backend:', error);
-            return false;
-        }
-    }, [authContext, getCurrentUserId]);
+const saveSessionToBackend = useCallback(async (session: ChatSession) => {
+    console.log('Skipping backend session save - sessions auto-created by chat messages');
+    return true;
+}, []);
 
     const saveVoteToStorage = useCallback(async (messageId: string, messageText: string, voteType: 'upvote' | 'downvote') => {
         try {
@@ -732,7 +627,9 @@ const extendSessionOnActivity = useCallback(async () => {
                 title: session.title,
                 timestamp: session.timestamp,
                 creationDate: session.creationDate,
-                userId: session.userId
+                userId: session.userId,
+                    srNumber: session.srNumber
+
             });
 
             const limitedSessions = filteredSessions.slice(0, 50);
@@ -810,32 +707,25 @@ const extendSessionOnActivity = useCallback(async () => {
     }
 }, [fetchBackendSessions, loadUserSessions, hasSessionContent]); // REMOVE extractSourcesFromText, cleanMessageText from here too
 
-    const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
-        try {
-            if (!hasSessionContent(sessionData.messages)) {
-                console.log('⏭ Skipping auto-save - session has no meaningful content');
-                return;
-            }
-
-            await saveSessionToStorage(sessionData);
-
-            const backendSaved = await saveSessionToBackend(sessionData);
-
-            if (backendSaved) {
-                console.log(' Session saved to BOTH local and backend database');
-            } else {
-                console.log(' Session saved locally only (backend save failed)');
-            }
-
-            setSessions(prev => {
-                const filtered = prev.filter(s => s.id !== sessionData.id);
-                return [sessionData, ...filtered];
-            });
-
-        } catch (error) {
-            console.error(' Enhanced auto-save failed:', error);
+const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
+    try {
+        if (!hasSessionContent(sessionData.messages)) {
+            console.log('Skipping auto-save - session has no meaningful content');
+            return;
         }
-    }, [saveSessionToStorage, saveSessionToBackend, hasSessionContent]);
+
+        await saveSessionToStorage(sessionData);
+        console.log('Session saved locally (backend creates sessions automatically)');
+
+        setSessions(prev => {
+            const filtered = prev.filter(s => s.id !== sessionData.id);
+            return [sessionData, ...filtered];
+        });
+
+    } catch (error) {
+        console.error('Enhanced auto-save failed:', error);
+    }
+}, [saveSessionToStorage, hasSessionContent]);
 
     const clearAllUserData = useCallback(async () => {
         try {
@@ -889,6 +779,73 @@ const extendSessionOnActivity = useCallback(async () => {
     const clearError = useCallback(() => {
         setError(null);
     }, []);
+
+        const submitSRTicket = useCallback(async (sessionId: string, srNumber: string) => {
+    try {
+        await extendSessionOnActivity();
+        console.log('📝 Submitting SR Ticket:', srNumber, 'for session:', sessionId);
+
+        const isSessionValid = await authContext.validateSessionBeforeRequest();
+        if (!isSessionValid) {
+            throw new Error('Session expired. Please log in again.');
+        }
+
+        const token = authContext.state.tokens?.access_token;
+        if (!token) {
+            throw new Error('No authentication token available');
+        }
+
+        const srTicketUrl = `${API_CONFIG.CHAT_API_BASE_URL}/addSRNumber`;
+        const userAgentHeaders = await getUserAgentHeaders();
+
+        const response = await safeFetch(srTicketUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+                'X-Client-Source': 'ToshibaChatbot-Mobile',
+                'X-Request-Type': 'sr-ticket',
+                'X-Platform': 'Android',
+                ...userAgentHeaders,
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                sr_number: srNumber
+            }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log('❌ SR Ticket error response:', errorText);
+            throw new Error(`SR Ticket submission failed: ${response.status} - ${errorText}`);
+        }
+
+        const responseText = await response.text();
+        console.log('✅ SR Ticket response:', responseText);
+
+        // Update the current session with SR number
+        setSessions(prev => prev.map(session => 
+            session.id === sessionId ? { ...session, srNumber } : session
+        ));
+
+        // Update selected session if it's the current one
+        if (selectedSession?.id === sessionId) {
+            setSelectedSessionState(prev => prev ? { ...prev, srNumber } : prev);
+        }
+
+        console.log('✅ SR Ticket submitted successfully');
+        clearError();
+
+    } catch (error) {
+        console.error('❌ SR Ticket submission error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to submit SR Ticket';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+    }
+}, [authContext, clearError, selectedSession, setSessions, setSelectedSessionState, extendSessionOnActivity]);
+
+
 
     const updateMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
         try {
@@ -1813,6 +1770,7 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         extractSourcesFromText,
         cleanMessageText,
         extendSessionOnActivity,
+        submitSRTicket
     }}>
         {children}
     </ChatContext.Provider>

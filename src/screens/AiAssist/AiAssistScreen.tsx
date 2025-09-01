@@ -21,6 +21,7 @@ import { getStyles } from './AiAssistScreen.styles';
 import Header from '../../components/header';
 import PromptInput from '../../components/PromptInput';
 import MessageCard from '../../components/MessageCard';
+import SRTicketInput from '../../components/SRTicketInput/SRTicketInput';
 import IconAssets, { getThemedIcon } from '../../assets/icons/IconAssets';
 import { useChat } from '../../context/ChatContext';
 import Sidebar from '../../components/Sidebar';
@@ -52,6 +53,7 @@ const AiAssistScreen = () => {
         clearError,
         startNewSession,
         currentSessionId,
+        selectedSession,
         getCurrentUserId,
         enhancedAutoSave,
         hasSessionContent
@@ -159,15 +161,24 @@ const AiAssistScreen = () => {
             <View style={styles.container}>
                 <Header onMenuPress={openMenu} />
 
-                <View style={styles.topBar}>
-                    <Text style={styles.topBarTitle}>Toshiba Field Service Assistant</Text>
-                    <TouchableOpacity
-                        onPress={handleNewChat}
-                        style={styles.newChatButton}
-                        activeOpacity={0.7}
-                    >
-                        {ThemedNewChatIcon && <ThemedNewChatIcon width={24} height={24} />}
-                    </TouchableOpacity>
+                <View style={styles.topBarContainer}>
+                    <View style={styles.topBar}>
+                        <Text style={styles.topBarTitle}>Toshiba Field Service Assistant</Text>
+                        <TouchableOpacity
+                            onPress={handleNewChat}
+                            style={styles.newChatButton}
+                            activeOpacity={0.7}
+                        >
+                            {ThemedNewChatIcon && <ThemedNewChatIcon width={24} height={24} />}
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* SR Ticket Input - Show only during active chat */}
+                    {messages.length > 0 && (
+                        <View style={styles.srTicketContainer}>
+                            <SRTicketInput />
+                        </View>
+                    )}
                 </View>
 
                 {error && (

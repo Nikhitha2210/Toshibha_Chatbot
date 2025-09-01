@@ -9,6 +9,11 @@ export const getStyles = (theme: 'light' | 'dark') => {
             flex: 1,
             backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background,
         },
+        topBarContainer: {
+            backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background,
+            borderBottomWidth: 1,
+            borderBottomColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
+        },
         topBar: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -16,8 +21,12 @@ export const getStyles = (theme: 'light' | 'dark') => {
             paddingHorizontal: 10,
             paddingTop: 25,
             paddingBottom: 20,
+        },
+        srTicketContainer: {
+            backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background2,
             borderBottomWidth: 1,
             borderBottomColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
+            paddingVertical: 4,
         },
         topBarTitle: {
             fontSize: 18,
@@ -79,19 +88,6 @@ export const getStyles = (theme: 'light' | 'dark') => {
             shadowOpacity: 0.1,
             shadowRadius: 3.84,
         },
-        // Add this to AiAssistScreen.styles.ts
-srTicketInput: {
-    borderWidth: 1,
-    borderColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 12,
-    color: theme === 'dark' ? Colors.dark.text : Colors.light.text,
-    backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background,
-    minWidth: 100,
-    maxWidth: 120,
-},
         
         inputContainer: {
             backgroundColor: theme === 'dark' ? Colors.dark.background2 : Colors.light.background2,
@@ -111,4 +107,4 @@ srTicketInput: {
             zIndex: 1,
         }
     });
-}
+};
