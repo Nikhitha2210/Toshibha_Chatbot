@@ -96,7 +96,7 @@ export const testNetworkConnections = async (): Promise<void> => {
         method: 'GET',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'ToshibaChatbot/1.0.8',
+          'User-Agent': 'ToshibaChatbot/1.0.9',
         }
       });
       
@@ -151,7 +151,7 @@ export const safeFetch = async (url: string, options: RequestInit = {}): Promise
       const fetchOptions: RequestInit = {
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'ToshibaChatbot/1.0.8',
+          'User-Agent': 'ToshibaChatbot/1.0.9',
           ...options.headers,
         },
         ...options,

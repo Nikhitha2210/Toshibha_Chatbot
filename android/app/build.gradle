@@ -79,11 +79,11 @@ android {
 
     namespace "com.toshibachatbot"
     defaultConfig {
-        applicationId "com.toshibachatbot"
+        applicationId "com.fieldserviceassistant"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "1.0.8"
+        versionCode 10
+        versionName "1.0.9"
     }
     
     // ADD THIS SECTION TO DISABLE LINT CHECKS

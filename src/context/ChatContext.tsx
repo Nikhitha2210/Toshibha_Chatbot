@@ -20,7 +20,7 @@ const logMobileAppStart = async () => {
         console.log('🚀 TOSHIBA MOBILE APP STARTED');
         console.log('📱 User-Agent:', headers['User-Agent']);
         console.log('📱 Platform: Android React Native');
-        console.log('📱 App Version: 1.0.8');
+        console.log('📱 App Version: 1.0.9');
     } catch (error) {
         console.log('📱 Mobile app started (fallback)');
     }
@@ -82,6 +82,7 @@ export interface VoteData {
 }
 
 interface BackendSession {
+    srNumber: string;
     id: string;
     user_id: string;
     session_name?: string;
@@ -455,7 +456,8 @@ const extendSessionOnActivity = useCallback(async () => {
                     creationDate: creationDate,
                     messages: messages,
                     userId: userId,
-                    label: title
+                    label: title,
+                    srNumber: item.srNumber || ''
                 };
             });
 
@@ -904,7 +906,8 @@ const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
                     creationDate: new Date().toISOString(),
                     messages: [...messages],
                     userId: getCurrentUserId(),
-                    label: sessionTitle
+                    label: sessionTitle,
+                    srNumber: selectedSession?.srNumber || ''
                 };
 
                 enhancedAutoSave(newSession);
@@ -1672,7 +1675,8 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
                         creationDate: new Date().toISOString(),
                         messages: messages,
                         userId: getCurrentUserId(),
-                        label: sessionTitle
+                        label: sessionTitle,
+                        srNumber: selectedSession?.srNumber || ''
                     };
 
                     await enhancedAutoSave(sessionData);
@@ -1691,7 +1695,7 @@ const submitFeedback = useCallback(async (messageText: string, feedback: any) =>
         } else if (messages.length > 0) {
             console.log('⏭Skipping auto-save - session lacks meaningful content');
         }
-    }, [messages, currentSessionId, authContext.state.isAuthenticated, getCurrentUserId, enhancedAutoSave, hasSessionContent]);
+    }, [messages, currentSessionId, authContext.state.isAuthenticated, getCurrentUserId, enhancedAutoSave, hasSessionContent, selectedSession?.srNumber]);
 
     useEffect(() => {
         if (messages.length > 0 && authContext.state.isAuthenticated) {

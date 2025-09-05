@@ -18,9 +18,10 @@ export const getStyles = (theme: 'light' | 'dark') => {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 10,
-            paddingTop: 25,
-            paddingBottom: 20,
+            paddingHorizontal: 15,
+            paddingTop: 15,
+            paddingBottom: 10,
+            
         },
         srTicketContainer: {
             backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background2,

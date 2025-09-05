@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: 25,
+        paddingTop: 40,
     },
     menuButton: {
         padding: 8,

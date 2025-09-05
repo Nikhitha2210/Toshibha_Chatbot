@@ -12,7 +12,7 @@ export const getStyles = (theme: 'light' | 'dark') => {
         
         headerContainer: {
             paddingHorizontal: 20,
-            paddingTop: 20,
+            paddingTop: 0,
             backgroundColor: theme === 'dark' ? Colors.dark.background : Colors.light.background,
         },
         
