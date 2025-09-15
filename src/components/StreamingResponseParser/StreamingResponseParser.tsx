@@ -1,9 +1,9 @@
-import React, { JSX, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { StyleSheet } from 'react-native';
-import Colors from '../../theme/colors';
+import Markdown from 'react-native-markdown-display';
 
-interface StreamingResponseParserProps {
+interface StreamingMessageParserProps {
     text: string;
     isStreaming: boolean;
     theme: 'light' | 'dark';
@@ -14,7 +14,7 @@ interface ParsedContent {
     content: string;
 }
 
-const StreamingResponseParser: React.FC<StreamingResponseParserProps> = ({ 
+const StreamingMessageParser: React.FC<StreamingMessageParserProps> = ({ 
     text, 
     isStreaming, 
     theme 
@@ -123,37 +123,155 @@ const StreamingResponseParser: React.FC<StreamingResponseParserProps> = ({
         setParsedContent(sections);
     }, [text]);
 
-    // Function to convert table string to simple table display
-    const renderTable = (tableStr: string): JSX.Element => {
+    // Function to convert table string to markdown table
+    const convertToMarkdownTable = (tableStr: string): string => {
         const lines = tableStr.trim().split('\n');
-        const rows = lines.map((line, index) => {
+        let markdownTable = '';
+        
+        // Process each line of the table
+        lines.forEach((line, index) => {
+            // Clean up the line and split by pipe
             const cells = line.trim().split('|').filter(cell => cell.trim() !== '');
             
-            return (
-                <View key={index} style={[styles.tableRow, index === 0 && styles.tableHeader]}>
-                    {cells.map((cell, cellIndex) => (
-                        <View key={cellIndex} style={styles.tableCell}>
-                            <Text style={[
-                                styles.tableCellText,
-                                { color: theme === 'dark' ? Colors.dark.text : Colors.light.text },
-                                index === 0 && styles.tableHeaderText
-                            ]}>
-                                {cell.trim()}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
-            );
+            if (cells.length > 0) {
+                // Add the cells with proper markdown formatting
+                markdownTable += '| ' + cells.join(' | ') + ' |\n';
+                
+                // Add the separator row after the header
+                if (index === 0) {
+                    markdownTable += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
+                }
+            }
         });
+        
+        return markdownTable;
+    };
 
-        return (
-            <View style={[
-                styles.tableContainer,
-                { borderColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke }
-            ]}>
-                {rows}
-            </View>
-        );
+    const markdownStyles = {
+        body: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 22,
+        },
+        heading1: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 18,
+            fontWeight: 'bold' as const,
+            marginBottom: 8,
+        },
+        heading2: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 16,
+            fontWeight: 'bold' as const,
+            marginBottom: 6,
+        },
+        heading3: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 14,
+            fontWeight: 'bold' as const,
+            marginBottom: 4,
+        },
+        paragraph: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 22,
+            marginBottom: 8,
+        },
+        list_item: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 14,
+            lineHeight: 20,
+            marginBottom: 4,
+        },
+        bullet_list: {
+            marginBottom: 8,
+        },
+        ordered_list: {
+            marginBottom: 8,
+        },
+        table: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f8f9fa',
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#ddd',
+            borderRadius: 8,
+            marginVertical: 8,
+            overflow: 'hidden' as const,
+        },
+        thead: {
+            backgroundColor: theme === 'dark' ? '#2a2a2a' : '#e9ecef',
+        },
+        th: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontSize: 13,
+            fontWeight: 'bold' as const,
+            padding: 12,
+            borderRightWidth: 1,
+            borderRightColor: theme === 'dark' ? '#444' : '#ccc',
+            textAlign: 'left' as const,
+        },
+        tr: {
+            borderBottomWidth: 1,
+            borderBottomColor: theme === 'dark' ? '#333' : '#ddd',
+        },
+        td: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontSize: 12,
+            padding: 12,
+            borderRightWidth: 1,
+            borderRightColor: theme === 'dark' ? '#444' : '#ccc',
+            textAlign: 'left' as const,
+        },
+        code_inline: {
+            backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f1f3f4',
+            color: theme === 'dark' ? '#ff6b6b' : '#d73a49',
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+            borderRadius: 3,
+            fontSize: 13,
+            fontFamily: 'monospace',
+        },
+        code_block: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f6f8fa',
+            padding: 12,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            marginVertical: 8,
+        },
+        fence: {
+            backgroundColor: theme === 'dark' ? '#1a1a1a' : '#f6f8fa',
+            padding: 12,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            marginVertical: 8,
+        },
+        blockquote: {
+            backgroundColor: theme === 'dark' ? 'rgba(230, 30, 30, 0.05)' : 'rgba(230, 30, 30, 0.02)', 
+            borderLeftWidth: 4,
+            borderLeftColor: '#E61E1E',
+            paddingLeft: 12,
+            paddingVertical: 8,
+            marginVertical: 8,
+            borderRadius: 4,
+        },
+        strong: {
+            color: theme === 'dark' ? '#fff' : '#000',
+            fontWeight: 'bold' as const,
+        },
+        em: {
+            color: theme === 'dark' ? '#ccc' : '#333',
+            fontStyle: 'italic' as const,
+        },
+        link: {
+            color: '#E61E1E',
+            textDecorationLine: 'underline' as const,
+        },
+        hr: {
+            backgroundColor: theme === 'dark' ? '#333' : '#e1e4e8',
+            height: 1,
+            marginVertical: 16,
+        },
     };
 
     const styles = getStyles(theme);
@@ -165,15 +283,17 @@ const StreamingResponseParser: React.FC<StreamingResponseParserProps> = ({
                     case 'TEXT':
                         return (
                             <View key={`text-${index}`} style={styles.textSection}>
-                                <Text style={styles.textContent}>
+                                <Markdown style={markdownStyles}>
                                     {section.content}
-                                </Text>
+                                </Markdown>
                             </View>
                         );
                     case 'TABLE':
                         return (
                             <View key={`table-${index}`} style={styles.tableSection}>
-                                {renderTable(section.content)}
+                                <Markdown style={markdownStyles}>
+                                    {convertToMarkdownTable(section.content)}
+                                </Markdown>
                             </View>
                         );
                     case 'SOURCE':
@@ -205,54 +325,25 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
     textSection: {
         marginBottom: 8,
     },
-    textContent: {
-        color: theme === 'dark' ? Colors.dark.text : Colors.light.text,
-        fontSize: 14,
-        lineHeight: 20,
-    },
     tableSection: {
         marginVertical: 12,
-    },
-    tableContainer: {
-        borderWidth: 1,
-        borderRadius: 8,
-        overflow: 'hidden',
-    },
-    tableRow: {
-        flexDirection: 'row',
-        borderBottomWidth: 1,
-        borderBottomColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
-    },
-    tableHeader: {
-        backgroundColor: theme === 'dark' ? Colors.dark.background3 : Colors.light.background2,
-    },
-    tableCell: {
-        flex: 1,
-        padding: 8,
-        borderRightWidth: 1,
-        borderRightColor: theme === 'dark' ? Colors.dark.stroke : Colors.light.stroke,
-    },
-    tableCellText: {
-        fontSize: 12,
-        textAlign: 'center',
-    },
-    tableHeaderText: {
-        fontWeight: 'bold',
     },
     sourceSection: {
         flexDirection: 'row',
         marginTop: 8,
         padding: 8,
-        backgroundColor: theme === 'dark' ? Colors.dark.background3 : Colors.light.background2,
+        backgroundColor: theme === 'dark' ? 'rgba(230, 30, 30, 0.08)' : 'rgba(230, 30, 30, 0.05)',
         borderRadius: 6,
+        borderLeftWidth: 3,
+        borderLeftColor: '#E61E1E',
     },
     sourceLabel: {
-        color: theme === 'dark' ? Colors.dark.primary : Colors.light.primary,
+        color: '#E61E1E',
         fontSize: 12,
         fontWeight: '600',
     },
     sourceContent: {
-        color: theme === 'dark' ? Colors.dark.text : Colors.light.text,
+        color: theme === 'dark' ? '#ccc' : '#333',
         fontSize: 12,
         flex: 1,
     },
@@ -265,7 +356,7 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: Colors.dark.primary,
+        backgroundColor: '#E61E1E',
         marginHorizontal: 2,
     },
     typingDot1: {
@@ -279,4 +370,4 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
     },
 });
 
-export default StreamingResponseParser;
+export default StreamingMessageParser;

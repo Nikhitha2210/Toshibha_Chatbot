@@ -226,7 +226,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                 selectable={true}
                 style={styles.imageViewerSubtitle}
               >
-                Enhanced viewing: ± 2 pages around reference
+                {/* Enhanced viewing: ± 2 pages around reference */}
               </Text>
             </View>
             <TouchableOpacity onPress={closeImageModal} style={styles.imageViewerCloseButton}>

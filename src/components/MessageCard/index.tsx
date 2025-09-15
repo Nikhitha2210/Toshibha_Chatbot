@@ -228,6 +228,112 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
     );
 };
 
+const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
+    const extractPartNumbers = (text: string): string[] => {
+        const partNumbers: string[] = [];
+        
+        // Your 4 specific patterns based on your requirements:
+        const patterns = [
+            /\b[0-9][A-Z][A-Z0-9]{10}\b/g,     // 3AC type - 13 digit pattern (digit + letter + 11 more)
+            /\b\d{2}[A-Za-z]\d{4}\b/g,         // 80y1 type - 8 digit pattern (2 digits + letter + 4 digits) 
+            /\b[A-Z0-9]{5,15}\b/g,             // Mixed alphanumeric like 28r3274 (5-15 chars)
+            /\b\d{8}\b/g,                      // Pure 8-digit numbers
+        ];
+
+        patterns.forEach(pattern => {
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const value = match[0];
+                // Filter out common false positives and ensure it looks like a part number
+                if (!partNumbers.includes(value) && 
+                    value.length >= 5 && 
+                    value.length <= 15 &&
+                    /[A-Z0-9]/.test(value) && // Must contain at least one letter or number
+                    !/^\d{4}$/.test(value) && // Exclude simple 4-digit numbers (likely years/dates)
+                    !value.match(/^(PAGE|PART|ITEM|STEP)$/i)) { // Exclude common words
+                    partNumbers.push(value);
+                }
+            }
+        });
+
+        return partNumbers;
+    };
+
+    const partNumbers = extractPartNumbers(text);
+
+    const handleCopyPartNumber = (partNumber: string) => {
+        Clipboard.setString(partNumber);
+        Alert.alert('Copied', `Part number "${partNumber}" copied to clipboard!`);
+    };
+
+    if (partNumbers.length === 0) {
+        return null;
+    }
+
+    return (
+        <View style={{
+            marginTop: 12,
+            padding: 10,
+            backgroundColor: theme === 'dark' ? 'rgba(230, 30, 30, 0.08)' : 'rgba(230, 30, 30, 0.05)',
+            borderRadius: 8,
+            borderLeftWidth: 4,
+            borderLeftColor: '#E61E1E',
+        }}>
+            <Text style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: '#E61E1E',
+                marginBottom: 8,
+            }}>
+                🔧 Part Numbers Found (tap to copy):
+            </Text>
+            <View style={{ 
+                flexDirection: 'row', 
+                flexWrap: 'wrap', 
+                gap: 8 
+            }}>
+                {partNumbers.map((partNumber, index) => (
+                    <TouchableOpacity
+                        key={index}
+                        onPress={() => handleCopyPartNumber(partNumber)}
+                        style={{
+                            backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f5f5f5',
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            borderWidth: 1,
+                            borderColor: '#E61E1E',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            elevation: 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 2,
+                        }}
+                    >
+                        <Text style={{
+                            fontSize: 13,
+                            fontWeight: '700',
+                            color: theme === 'dark' ? '#fff' : '#000',
+                            fontFamily: 'monospace',
+                            marginRight: 6,
+                        }}>
+                            {partNumber}
+                        </Text>
+                        <Text style={{
+                            fontSize: 10,
+                            color: '#E61E1E',
+                        }}>
+                            📋
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+        </View>
+    );
+};
+
 const MessageCard: React.FC<MessageCardProps> = ({
     time,
     message,
@@ -445,7 +551,10 @@ const MessageCard: React.FC<MessageCardProps> = ({
                             {isStreaming && !agentStatus && <Text style={{ color: '#E61E1E' }}>|</Text>}
                         </Text>
                     ) : (
-                        <MessageRenderer text={message} theme={theme} />
+                        <>
+                            <MessageRenderer text={message} theme={theme} />
+                            <PartNumberExtractor text={message} theme={theme} />
+                        </>
                     )}
                 </View>
             )}
