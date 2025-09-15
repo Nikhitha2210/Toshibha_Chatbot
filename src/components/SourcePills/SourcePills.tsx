@@ -29,7 +29,8 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [currentDisplayIndex, setCurrentDisplayIndex] = useState(1);
-  const [allGroupSources, setAllGroupSources] = useState<SourceReference[]>([]);
+  const [allImageUrls, setAllImageUrls] = useState<any[]>([]);
+  const [allImageNames, setAllImageNames] = useState<string[]>([]);
 
   const { state } = useAuth();
 
@@ -37,7 +38,37 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     return null;
   }
 
-  // Group sources by filename
+  // Generate +/- 2 pages for a source (web app feature)
+  const generatePageUrls = (source: SourceReference, centerPage: number) => {
+    const urls: any[] = [];
+    const names: string[] = [];
+    
+    // Generate 5 pages: center ± 2
+    for (let offset = -2; offset <= 2; offset++) {
+      const pageNum = centerPage + offset;
+      if (pageNum > 0) { // Only positive page numbers
+        // Replace the page number in the original URL
+        const newUrl = source.url?.replace(`_page_${centerPage}`, `_page_${pageNum}`) || '';
+        
+        urls.push({
+          url: newUrl,
+          props: {
+            headers: {
+              'Authorization': `Bearer ${state.tokens?.access_token}`,
+              'Accept': 'image/png,image/jpeg,image/*',
+              'Cache-Control': 'no-cache'
+            }
+          }
+        });
+        
+        names.push(`${source.filename} Page ${pageNum}`);
+      }
+    }
+    
+    return { urls, names };
+  };
+
+  // Group sources by filename (like web app)
   const groupedSources = sources.reduce((acc, source, index) => {
     const key = source.filename;
     if (!acc[key]) {
@@ -47,58 +78,65 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
     return acc;
   }, {} as Record<string, (SourceReference & { originalIndex: number })[]>);
 
-  // Filter sources that have URLs and create image array
-  const sourcesWithUrls = sources.filter(source => source.url);
-  const imageUrls = sourcesWithUrls.map(source => ({
-    url: source.url!,
-    props: {
-      headers: {
-        'Authorization': `Bearer ${state.tokens?.access_token}`,
-        'Accept': 'image/png,image/jpeg,image/*',
-        'Cache-Control': 'no-cache'
-      }
-    }
-  }));
-
   const handlePillPress = (source: SourceReference, groupSources: (SourceReference & { originalIndex: number })[]) => {
-    console.log('=== PILL PRESS DEBUG ===');
+    console.log('=== ENHANCED PILL PRESS DEBUG ===');
     console.log('Pill pressed for source:', source.filename);
     console.log('Group sources count:', groupSources.length);
     console.log('Source URL exists:', !!source.url);
-    console.log('Total sources:', sources.length);
-    console.log('Sources with URLs:', sourcesWithUrls.length);
     
-    // Get all sources from this group that have URLs
-    const groupSourcesWithUrls = groupSources.filter(s => s.url);
-    
-    if (groupSourcesWithUrls.length > 0) {
-      // Find the index of the first source from this group among all sources that have URLs
-      const imageIndex = sourcesWithUrls.findIndex(s => s.awsLink === groupSourcesWithUrls[0].awsLink);
-      
-      console.log('Found image index:', imageIndex);
-      console.log('Setting selectedImageIndex to:', imageIndex);
-      console.log('Display index will be:', imageIndex + 1);
-      
-      setSelectedSource(groupSourcesWithUrls[0]);
-      setAllGroupSources(groupSourcesWithUrls);
-      setSelectedImageIndex(imageIndex >= 0 ? imageIndex : 0);
-      setCurrentDisplayIndex(imageIndex + 1);
-      setImageModalVisible(true);
-    } else {
-      console.log('No URL available for any source in group');
+    if (!source.url) {
+      console.log('No URL available for source');
       Alert.alert(
         'No Image Available',
         'This source does not have an associated image to display.',
         [{ text: 'OK' }]
       );
+      return;
     }
-    console.log('=== PILL PRESS DEBUG END ===');
+
+    // Generate all image URLs for all sources in the group with +/- 2 pages
+    const allUrls: any[] = [];
+    const allNames: string[] = [];
+    let startIndex = 0;
+
+    groupSources.forEach((groupSource, groupIndex) => {
+      if (groupSource.url) {
+        // Extract center page number
+        const centerPage = parseInt(groupSource.pages.split(',')[0].split('-')[0].trim());
+        console.log(`Generating pages for ${groupSource.filename}, center page: ${centerPage}`);
+        
+        // Generate center ± 2 pages
+        const { urls, names } = generatePageUrls(groupSource, centerPage);
+        
+        // If this is the source that was clicked, remember where its center page is
+        if (groupSource.awsLink === source.awsLink) {
+          startIndex = allUrls.length + 2; // Center page is at offset 2 in the 5-page array
+          console.log(`Selected source will start at index: ${startIndex}`);
+        }
+        
+        allUrls.push(...urls);
+        allNames.push(...names);
+      }
+    });
+
+    console.log(`Total generated URLs: ${allUrls.length}`);
+    console.log(`Starting at index: ${startIndex}`);
+    
+    setAllImageUrls(allUrls);
+    setAllImageNames(allNames);
+    setSelectedSource(source);
+    setSelectedImageIndex(startIndex);
+    setCurrentDisplayIndex(startIndex + 1);
+    setImageModalVisible(true);
+    
+    console.log('=== ENHANCED PILL PRESS DEBUG END ===');
   };
 
   const closeImageModal = () => {
     setImageModalVisible(false);
     setSelectedSource(null);
-    setAllGroupSources([]);
+    setAllImageUrls([]);
+    setAllImageNames([]);
     setSelectedImageIndex(0);
     setCurrentDisplayIndex(1);
   };
@@ -116,11 +154,10 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
   // Update current source when image changes
   const handleImageChange = (index?: number) => {
     console.log('Image changed to index:', index);
-    if (index !== undefined && sourcesWithUrls[index]) {
-      const newSource = sourcesWithUrls[index];
-      setSelectedSource(newSource);
+    if (index !== undefined && allImageNames[index]) {
       setCurrentDisplayIndex(index + 1);
-      console.log('Updated to source:', newSource.filename, 'Display index:', index + 1);
+      console.log('Updated display index to:', index + 1);
+      console.log('Current image name:', allImageNames[index]);
     }
   };
 
@@ -167,7 +204,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
         ))}
       </ScrollView>
 
-      {/* Fixed Image Viewer with Proper Zoom */}
+      {/* Enhanced Image Viewer with +/- 2 Pages */}
       <Modal
         visible={imageModalVisible}
         transparent={true}
@@ -183,13 +220,13 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                 style={styles.imageViewerTitle}
                 numberOfLines={2}
               >
-                {selectedSource?.filename}
+                {allImageNames[selectedImageIndex] || selectedSource?.filename}
               </Text>
               <Text 
                 selectable={true}
                 style={styles.imageViewerSubtitle}
               >
-                {selectedSource && formatPageText(selectedSource.pages)}
+                Enhanced viewing: ± 2 pages around reference
               </Text>
             </View>
             <TouchableOpacity onPress={closeImageModal} style={styles.imageViewerCloseButton}>
@@ -197,18 +234,18 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Fixed Image Counter */}
-          {sourcesWithUrls.length > 1 && (
+          {/* Enhanced Image Counter */}
+          {allImageUrls.length > 1 && (
             <View style={styles.imageIndicator}>
               <Text style={styles.imageIndicatorText}>
-                {currentDisplayIndex} / {sourcesWithUrls.length}
+                {currentDisplayIndex} / {allImageUrls.length}
               </Text>
             </View>
           )}
 
-          {imageUrls.length > 0 && (
+          {allImageUrls.length > 0 && (
             <ImageViewer
-              imageUrls={imageUrls}
+              imageUrls={allImageUrls}
               index={selectedImageIndex}
               onSwipeDown={closeImageModal}
               enableSwipeDown={true}
@@ -226,9 +263,9 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
                   <Text style={styles.imageViewerInstructions}>
                     Pinch to zoom • Double tap to reset • Swipe down to close
                   </Text>
-                  {imageUrls.length > 1 && (
+                  {allImageUrls.length > 1 && (
                     <Text style={styles.imageViewerNavigation}>
-                      Swipe left/right to navigate between images
+                      Swipe left/right for ± 2 pages context • Total: {allImageUrls.length} pages
                     </Text>
                   )}
                 </View>
@@ -236,7 +273,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, theme }) => {
               loadingRender={() => (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#FF6A00" />
-                  <Text style={styles.loadingText}>Loading image...</Text>
+                  <Text style={styles.loadingText}>Loading enhanced view...</Text>
                 </View>
               )}
               failImageSource={{
@@ -330,7 +367,8 @@ const getStyles = (theme: 'light' | 'dark') => StyleSheet.create({
   },
   imageViewerSubtitle: {
     color: '#CCCCCC',
-    fontSize: 14,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   imageViewerCloseButton: {
     width: 40,
