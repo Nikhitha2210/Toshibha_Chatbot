@@ -79,7 +79,7 @@ android {
 
     namespace "com.toshibachatbot"
     defaultConfig {
-        applicationId "com.fieldserviceassistant"
+        applicationId "com.toshibachatbot"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 11
@@ -90,7 +90,7 @@ android {
     lint {
         checkReleaseBuilds false
         abortOnError false
-        disable 'Instantiatable'
+        disable 'Instantiatable'    
     }
     
     signingConfigs {

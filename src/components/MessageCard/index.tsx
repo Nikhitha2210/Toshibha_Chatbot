@@ -229,14 +229,57 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
 };
 
 const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
+    const isLikelyPartNumber = (value: string): boolean => {
+        // Must contain at least one digit AND one letter
+        const hasDigit = /\d/.test(value);
+        const hasLetter = /[A-Z]/i.test(value);
+        if (!hasDigit || !hasLetter) return false;
+        
+        // Exclude common words that might match the patterns
+        const commonWords = [
+            'POWER', 'SUPPLY', 'MODULE', 'SYSTEM', 'BOARD', 'CABLE', 'SWITCH', 
+            'MOTOR', 'DRIVE', 'PANEL', 'LIGHT', 'VOLTAGE', 'CURRENT', 'SERIAL', 
+            'MODEL', 'MANUAL', 'GUIDE', 'WARNING', 'CAUTION', 'DANGER', 'REMOVE', 
+            'INSTALL', 'REPLACE', 'CHECK', 'TEST', 'CLEAN', 'VERIFY', 'ADJUST', 
+            'BEFORE', 'AFTER', 'DURING', 'WHILE', 'SHOULD', 'COULD', 'WOULD', 
+            'MIGHT', 'FIGURE', 'TABLE', 'CHAPTER', 'SECTION', 'LOADER', 'STATUS', 
+            'ERROR', 'FAILED', 'NETWORK', 'REQUEST', 'PAGE', 'PART', 'ITEM', 'STEP',
+            'CONTROL', 'OUTPUT', 'INPUT', 'SIGNAL', 'GROUND', 'COMMON', 'SOURCE',
+            'DISPLAY', 'SCREEN', 'BUTTON', 'SWITCH', 'CONNECTOR', 'TERMINAL',
+            'ASSEMBLY', 'HOUSING', 'BRACKET', 'MOUNTING', 'SCREW', 'BOLT', 'NUT',
+            'WASHER', 'GASKET', 'SEAL', 'SPRING', 'BEARING', 'SHAFT', 'GEAR',
+            'CIRCUIT', 'DEVICE', 'UNIT', 'COMPONENT', 'ELEMENT', 'MEMBER',
+            'PROCEDURE', 'OPERATION', 'FUNCTION', 'FEATURE', 'OPTION', 'SETTING'
+        ];
+        
+        if (commonWords.includes(value.toUpperCase())) return false;
+        
+        // If it's all letters, it's probably not a part number
+        if (/^[A-Z]+$/i.test(value)) return false;
+        
+        // If it's all numbers, only allow if 8+ digits (from the 8-digit pattern)
+        if (/^\d+$/.test(value) && value.length < 8) return false;
+        
+        // Additional filtering: avoid common abbreviations
+        const abbreviations = [
+            'AC', 'DC', 'LED', 'LCD', 'USB', 'RAM', 'ROM', 'CPU', 'GPU',
+            'MM', 'CM', 'KG', 'LB', 'OZ', 'PSI', 'RPM', 'CFM', 'BTU',
+            'PWR', 'GND', 'VCC', 'VDD', 'VSS', 'CLK', 'RST', 'INT'
+        ];
+        
+        if (abbreviations.includes(value.toUpperCase())) return false;
+        
+        return true;
+    };
+
     const extractPartNumbers = (text: string): string[] => {
         const partNumbers: string[] = [];
         
-        // Your 4 specific patterns based on your requirements:
+        // Keep your original 4 patterns - they work for finding candidates
         const patterns = [
-            /\b[0-9][A-Z][A-Z0-9]{10}\b/g,     // 3AC type - 13 digit pattern (digit + letter + 11 more)
-            /\b\d{2}[A-Za-z]\d{4}\b/g,         // 80y1 type - 8 digit pattern (2 digits + letter + 4 digits) 
-            /\b[A-Z0-9]{5,15}\b/g,             // Mixed alphanumeric like 28r3274 (5-15 chars)
+            /\b[0-9][A-Z][A-Z0-9]{10}\b/g,     // 3AC type - 13 digit pattern
+            /\b\d{2}[A-Za-z]\d{4}\b/g,         // 80y1 type - 7 digit pattern 
+            /\b[A-Z0-9]{5,15}\b/g,             // Mixed alphanumeric like 28R3274 (keep this!)
             /\b\d{8}\b/g,                      // Pure 8-digit numbers
         ];
 
@@ -244,13 +287,12 @@ const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | '
             let match;
             while ((match = pattern.exec(text)) !== null) {
                 const value = match[0];
-                // Filter out common false positives and ensure it looks like a part number
+                
+                // Apply the improved filtering logic
                 if (!partNumbers.includes(value) && 
                     value.length >= 5 && 
                     value.length <= 15 &&
-                    /[A-Z0-9]/.test(value) && // Must contain at least one letter or number
-                    !/^\d{4}$/.test(value) && // Exclude simple 4-digit numbers (likely years/dates)
-                    !value.match(/^(PAGE|PART|ITEM|STEP)$/i)) { // Exclude common words
+                    isLikelyPartNumber(value)) {
                     partNumbers.push(value);
                 }
             }

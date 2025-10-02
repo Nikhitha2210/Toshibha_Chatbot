@@ -3,12 +3,12 @@ import { sanitizeError, isHtmlResponse } from '../utils/errorSanitizer';
 export const API_CONFIG = {
   // ===== PRODUCTION ENVIRONMENT (ACTIVE) =====
   // Chat API Configuration - Backend (HTTPS)
-  // CHAT_API_BASE_URL: 'https://tgcsbe.iopex.ai',
-  CHAT_API_BASE_URL: 'https://tgcs-preprod.iopex.ai/api/core',
+  CHAT_API_BASE_URL: 'https://tgcsbe.iopex.ai',
+  // CHAT_API_BASE_URL: 'https://tgcs-preprod.iopex.ai/api/core',
     
   // Auth API Configuration - Auth Server (HTTP - requires network security config)
-  // AUTH_API_BASE_URL: 'http://3.128.153.238:8004',
-  AUTH_API_BASE_URL: 'https://tgcs-preprod.iopex.ai/auth-api',
+  AUTH_API_BASE_URL: 'http://3.128.153.238:8004',
+  // AUTH_API_BASE_URL: 'https://tgcs-preprod.iopex.ai/auth-api',
     
   // Tenant ID - Using 'toshiba' tenant
   TENANT_ID: 'toshiba',
