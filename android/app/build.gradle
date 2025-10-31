@@ -82,8 +82,8 @@ android {
         applicationId "com.toshibachatbot"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "1.10"
+        versionCode 15
+        versionName "1.14"
     }
     
     // ADD THIS SECTION TO DISABLE LINT CHECKS

@@ -1,15 +1,16 @@
-import React, { useEffect } from 'react';
-import { AppState, StyleSheet } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, {useEffect} from 'react';
+import {AppState, StyleSheet} from 'react-native';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
 
-import { AuthProvider } from './src/context/AuthContext';
-import { PromptProvider } from './src/context/PromptContext';
-import { ThemeProvider } from './src/context/ThemeContext';
-import { ChatProvider } from './src/context/ChatContext';
+import {AuthProvider} from './src/context/AuthContext';
+import {PromptProvider} from './src/context/PromptContext';
+import {ThemeProvider} from './src/context/ThemeContext';
+import {ChatProvider} from './src/context/ChatContext';
 
-import { checkMicrophonePermission } from './src/utils/checkMicrophonePermissions';
+import {checkMicrophonePermission} from './src/utils/checkMicrophonePermissions';
 import Navigation from './src/navigation';
-import ErrorBoundary from './src/ErrorBoundary/ErrorBoundary'; // ✅ Import the separate ErrorBoundary
+
+import ErrorBoundary from './src/ErrorBoundary/ErrorBoundary'; 
 
 const App = () => {
   useEffect(() => {
@@ -19,7 +20,10 @@ const App = () => {
       }
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
 
     checkMicrophonePermission();
 

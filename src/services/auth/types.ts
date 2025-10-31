@@ -16,6 +16,7 @@ export interface TokenResponse {
 }
 
 export interface UserDetailResponse {
+  biometric_mfa_enabled: any;
   id: string | number;
   email: string;
   full_name?: string;

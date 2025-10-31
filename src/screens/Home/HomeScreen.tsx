@@ -6,7 +6,7 @@ import {
     Text,
     SafeAreaView as RN_SafeAreaView,
     Keyboard,
-    Platform
+    Platform,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +28,7 @@ const HomeScreen = () => {
     const [androidVersion, setAndroidVersion] = useState(0);
 
     const insets = useSafeAreaInsets();
-    const EXTRA_BOTTOM_PADDING = 12; // <-- Add this extra value
+    const EXTRA_BOTTOM_PADDING = 12;
 
     const { theme } = useThemeContext();
     const styles = getStyles(theme);
@@ -100,7 +100,6 @@ const HomeScreen = () => {
                     </View>
                 </View>
 
-                {/* Apply keyboard height + safe area insets + extra bottom padding */}
                 <View style={[
                     styles.inputWrapper,
                     Platform.OS === 'android' && androidVersion >= 35

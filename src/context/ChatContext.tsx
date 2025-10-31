@@ -12,6 +12,8 @@ import {
 } from '../config/environment';
 import { getUserAgentHeaders, logUserAgent } from '../utils/userAgentUtils';
 import { AuthApiClient } from '../services/auth/AuthApiClient'; 
+
+import DeviceInfo from 'react-native-device-info';
 const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
 
 const logMobileAppStart = async () => {
@@ -20,7 +22,7 @@ const logMobileAppStart = async () => {
         console.log('🚀 TOSHIBA MOBILE APP STARTED');
         console.log('📱 User-Agent:', headers['User-Agent']);
         console.log('📱 Platform: Android React Native');
-        console.log('📱 App Version: 1.10');
+        console.log('📱 App Version: 1.14');
     } catch (error) {
         console.log('📱 Mobile app started (fallback)');
     }
@@ -1206,9 +1208,17 @@ const sendMessage = useCallback(async (text: string) => {
             session: sessionObject,
             // ✅ Also send messages array for compatibility (last 12 like web app)
             messages: sessionObject.messages.slice(-12),
-            collection: 'cisco_clo'  // Use web app's default collection
+            collection: 'cisco_clo',  // Use web app's default collection
+
+            appVersion: DeviceInfo.getVersion(),            
+            buildNumber: parseInt(await DeviceInfo.getBuildNumber()), 
+            platform: 'android'
+
         };
 
+                    console.log('📱 Sending with app version:', requestBody.appVersion);
+            console.log('🔢 Build number:', requestBody.buildNumber);
+            console.log('📤 Request body keys:', Object.keys(requestBody));
         console.log(' Request body with session object:');
         console.log('  - Query:', requestBody.query);
         console.log('  - Session ID:', requestBody.sid);

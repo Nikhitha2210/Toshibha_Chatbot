@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 import { ROUTE_NAMES } from './constants';
 import { useAuth } from '../context/AuthContext';

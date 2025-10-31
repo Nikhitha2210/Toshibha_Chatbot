@@ -14,8 +14,6 @@ import {
   ActivityIndicator, 
   Pressable,
   SafeAreaView as RN_SafeAreaView,
-  Dimensions,
-  BackHandler
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,8 +24,8 @@ import Colors from '../../theme/colors';
 import GoogleLogo from '../../assets/images/google.png';
 import IconAssets from '../../assets/icons/IconAssets';
 import { useAuth } from '../../context/AuthContext';
-import { getDeviceInfo } from '../../utils/deviceDetection';
 import { ROUTE_NAMES } from '../../navigation/constants';
+import { biometricService } from '../../services/biometric/BiometricService';
 
 type RootStackParamList = {
   Login: undefined;
@@ -38,7 +36,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const APP_VERSION = "1.10";
+const APP_VERSION = "1.14-TEST2";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -48,12 +46,15 @@ const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [androidVersion, setAndroidVersion] = useState(0);
+  const [biometricChecked, setBiometricChecked] = useState(false);
 
   const navigation = useNavigation<NavigationProp>();
-  const { login, state, clearError } = useAuth(); 
+  const { login, state, clearError, loginWithBiometric } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
+  const loginInProgress = useRef(false);
+  const biometricAttempted = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -73,6 +74,68 @@ const LoginScreen = () => {
       };
     }
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        biometricAttempted.current = false;
+        setBiometricChecked(false);
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (
+        biometricAttempted.current || 
+        loginInProgress.current || 
+        state.isAuthenticated || 
+        state.isLoading ||
+        biometricChecked
+      ) {
+        return;
+      }
+
+      const checkBiometric = async () => {
+        try {
+          const isBiometricEnabled = await biometricService.isBiometricEnabled();
+          
+          if (!isBiometricEnabled) {
+            setBiometricChecked(true);
+            return;
+          }
+
+          console.log('Biometric enabled, showing prompt...');
+          
+          biometricAttempted.current = true;
+          setBiometricChecked(true);
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          if (state.isAuthenticated || state.isLoading) {
+            console.log('⏭️ Skipping biometric - session already being restored');
+            return;
+          }
+          
+          try {
+            await loginWithBiometric();
+          } catch (error) {
+            console.log('Biometric login failed');
+            
+            const errorMessage = error instanceof Error ? error.message : '';
+            if (errorMessage.includes('cancel') || errorMessage.includes('Cancel')) {
+              biometricAttempted.current = false;
+            }
+          }
+        } catch (error) {
+          console.log('Error checking biometric:', error);
+          setBiometricChecked(true);
+        }
+      };
+
+      checkBiometric();
+    }, [state.isAuthenticated, state.isLoading, biometricChecked])
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -110,8 +173,10 @@ const LoginScreen = () => {
       return;
     }
 
+    loginInProgress.current = true;
+
     try {
-      await login(email.trim(), password); 
+      await login(email.trim(), password);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       let displayMessage = '';
@@ -127,7 +192,6 @@ const LoginScreen = () => {
           break;
         case 'MFA_REQUIRED_EMAIL':
         case 'MFA_REQUIRED_TOTP':
-          // Don't show alert - user is being navigated to OTP screen
           return;
         default:
           if (errorMessage.includes('timed out') || errorMessage.includes('Could not connect')) {
@@ -138,6 +202,8 @@ const LoginScreen = () => {
       }
 
       Alert.alert('Login Failed', displayMessage);
+    } finally {
+      loginInProgress.current = false;
     }
   };
 
@@ -220,7 +286,7 @@ const LoginContent = ({
 
         <View style={styles.mainWrapper}>
           <View style={styles.centreText}>
-            <Text style={styles.title}>Sign in to ElevAlte</Text>
+            <Text style={styles.title}>Sign in to ElevAIte</Text>
             <Text style={styles.subtitle}>Enter your login details below.</Text>
           </View>
 
@@ -266,10 +332,7 @@ const LoginContent = ({
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
-              style={{
-                padding: 8,
-                marginLeft: 8,
-              }}
+              style={styles.eyeIconContainer}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <IconAssets.EyeOff width={20} height={20} />
@@ -277,8 +340,8 @@ const LoginContent = ({
           </View>
 
           {state.error && (
-            <View style={{ backgroundColor: '#ffebee', padding: 10, borderRadius: 5, marginBottom: 10 }}>
-              <Text style={{ color: '#c62828', fontSize: 14 }}>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>
                 {state.error}
               </Text>
             </View>
@@ -299,6 +362,7 @@ const LoginContent = ({
           <Pressable style={styles.link} onPress={() => navigation.navigate(ROUTE_NAMES.ForgotPassword)}>
             <Text style={styles.linkText}>Forgot password?</Text>
           </Pressable>
+
         </View>
       </View>
 

@@ -20,16 +20,14 @@ const SettingsScreen = () => {
         navigation.navigate(ROUTE_NAMES.ResetPassword, { fromSettings: true });
     };
 
-    const handleAuthentication = () => {
+    const handleMFASettings = () => {
         navigation.navigate(ROUTE_NAMES.MFASettings);
-    }
+    };
 
     const settingsOptions = [
-        // { id: '1', title: 'Profile', icon: 'person', screen: 'Profile' },
-        // { id: '2', title: 'Account', icon: 'settings', screen: 'Account' },
-        { id: '3', title: 'Security', icon: 'lock-closed', action: handleSecurity },
-        { id: '4', title: 'Logout', icon: 'log-out', action: logoutUser },
-        // { id: '5', title: 'Authentication', icon: 'shield-checkmark', action: handleAuthentication },
+        { id: '1', title: 'Change Password', icon: 'lock-closed', action: handleSecurity },
+        { id: '2', title: 'Multi-Factor Authentication', icon: 'shield-checkmark', action: handleMFASettings },
+        { id: '3', title: 'Logout', icon: 'log-out', action: logoutUser },
     ];
 
     const renderItem = ({ item }: { item: any }) => (
@@ -45,6 +43,7 @@ const SettingsScreen = () => {
         >
             <Ionicons name={item.icon} size={20} color="#fff" style={styles.icon} />
             <Text style={styles.optionText}>{item.title}</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.dark.subText} />
         </TouchableOpacity>
     );
 
@@ -67,15 +66,15 @@ const SettingsScreen = () => {
                         </View>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Account</Text>
+                    <Text style={styles.sectionTitle}>Security</Text>
 
                     <FlatList
                         data={settingsOptions}
                         renderItem={renderItem}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={styles.list}
+                        scrollEnabled={false}
                     />
-
                 </View>
             </ScrollView>
         </View>
@@ -129,5 +128,6 @@ const styles = StyleSheet.create({
     optionText: {
         color: '#fff',
         fontSize: 16,
+        flex: 1,
     },
 });

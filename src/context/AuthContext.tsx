@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
-import { Alert, BackHandler } from 'react-native';
+import { Alert, BackHandler, Platform } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
 
 import { AuthApiClient } from '../services/auth/AuthApiClient';
@@ -7,9 +7,11 @@ import { AuthStorage } from '../services/auth/storage';
 import { AuthState, UserDetailResponse, TokenResponse } from '../services/auth/types';
 import { API_CONFIG } from '../config/environment';
 import { getUserAgentHeaders, logUserAgent } from '../utils/userAgentUtils';
+import { biometricService } from '../services/biometric/BiometricService';
 
 const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
 import { EXTENDED_SESSION_CONFIG } from '../config/sessionConfig';
+import DeviceInfo from 'react-native-device-info';
 
 type AuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
@@ -99,6 +101,10 @@ interface AuthContextType {
   resetPassword: (newPassword: string) => Promise<{ success: boolean; message: string }>;
   changePasswordUser: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  checkBiometricAvailability: () => Promise<{ available: boolean; biometryType: string | undefined }>;
+  enableBiometric: () => Promise<boolean>;
+  loginWithBiometric: () => Promise<boolean>;
+  clearAllAuthData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -114,6 +120,7 @@ export function AuthProvider(props: AuthProviderProps) {
   const isValidating = useRef<boolean>(false);
   const navigationRef = useRef<any>(null);
   const isSessionExpiring = useRef<boolean>(false);
+  const intentionalLogout = useRef<boolean>(false);
 
   const setNavigationRef = (ref: any) => {
     navigationRef.current = ref;
@@ -153,105 +160,260 @@ export function AuthProvider(props: AuthProviderProps) {
     }
   }, []);
 
-  const validateCurrentSession = async (): Promise<boolean> => {
-    if (!state.tokens?.access_token) {
-      return false;
-    }
+const validateCurrentSession = async (): Promise<boolean> => {
+  if (!state.tokens?.access_token) {
+    return false;
+  }
 
-    if (isValidating.current) {
+  if (isValidating.current) {
+    return true;
+  }
+
+  try {
+    isValidating.current = true;
+
+    const response = await enhancedFetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${state.tokens.access_token}`,
+        'X-Tenant-ID': API_CONFIG.TENANT_ID,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Token is valid
+    if (response.status === 200) {
+      console.log('✅ Session valid');
       return true;
     }
 
-    try {
-      isValidating.current = true;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1800000);
-
-      console.log('🔍 VALIDATING SESSION WITH USER-AGENT...');
-      const response = await enhancedFetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${state.tokens.access_token}`,
-          'X-Tenant-ID': API_CONFIG.TENANT_ID,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.status === 200) {
-        console.log('✅ Session validation successful');
-        return true;
-      } else if (response.status === 401) {
-        console.log('❌ Session validation failed - 401');
+    // Token expired - try to refresh
+    if (response.status === 401) {
+      console.log('🔄 Access token expired, refreshing...');
+      
+      if (!state.tokens.refresh_token) {
+        console.log('❌ No refresh token');
         return false;
-      } else {
-        console.log('⚠️ Session validation uncertain - assuming valid');
+      }
+
+      try {
+        // Get new tokens
+        const newTokens = await authApiClient.refreshToken(state.tokens.refresh_token);
+        
+        // Save them
+        await AuthStorage.saveTokens(newTokens);
+        
+        // Update state
+        dispatch({
+          type: 'TOKEN_REFRESHED',
+          payload: newTokens,
+        });
+        
+        console.log('✅ Token refreshed automatically');
         return true;
+        
+      } catch (refreshError) {
+        console.log('❌ Refresh failed - truly expired');
+        return false;
       }
-    } catch (error) {
-      console.log('⚠️ Session validation error:', error);
-      return true;
-    } finally {
-      isValidating.current = false;
-    }
-  };
-
-  const handleSessionExpired = async () => {
-    if (isSessionExpiring.current) {
-      return;
     }
 
-    isSessionExpiring.current = true;
+    // Other errors - don't logout
+    return true;
 
-    try {
-      console.log('🚨 HANDLING SESSION EXPIRY...');
-      await AuthStorage.clearAuthData();
-      stopPeriodicSessionCheck();
-      dispatch({ type: 'SESSION_EXPIRED' });
+  } catch (error) {
+    console.log('⚠️ Validation error:', error);
+    return true; // Don't logout on errors
+  } finally {
+    isValidating.current = false;
+  }
+};
 
-      if (navigationRef.current) {
-        navigationRef.current.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
+
+const logAuthToBackend = async (
+  authMethod: 'password' | 'fingerprint',
+  userEmail: string
+) => {
+  try {
+    // Get user agent headers (you already have this function)
+    const userAgentHeaders = await getUserAgentHeaders();
+    
+    const logData = {
+      auth_method: authMethod,
+      app_version: DeviceInfo.getVersion(),
+      user_email: userEmail,
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Send to backend
+    await fetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/log-mobile-auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...userAgentHeaders,
+      },
+      body: JSON.stringify(logData),
+    });
+    
+    console.log('✅ Auth event logged');
+  } catch (error) {
+    console.error('Failed to log auth:', error);
+    // Don't throw - continue with authentication
+  }
+};
+
+const handleSessionExpired = async () => {
+  if (isSessionExpiring.current) {
+    return;
+  }
+
+  isSessionExpiring.current = true;
+
+  try {
+    console.log('🚨 SESSION EXPIRED - Checking for biometric recovery...');
+    
+    // STEP 1: Check if biometric is enabled
+    const hasBiometric = await biometricService.isBiometricEnabled();
+    
+    if (hasBiometric) {
+      console.log('🔐 Biometric available, attempting silent recovery...');
+      
+      try {
+        // STEP 2: Try to recover session using biometric
+        const refreshToken = await biometricService.getStoredToken();
+        
+        if (refreshToken) {
+          console.log('🔄 Attempting token refresh with stored token...');
+          
+          try {
+            // Try to refresh the session
+            const newTokens = await authApiClient.refreshToken(refreshToken);
+            const user = await authApiClient.getUserDetails(newTokens.access_token);
+
+            // Save new tokens
+            await Promise.all([
+              AuthStorage.saveTokens(newTokens),
+              AuthStorage.saveUserData(user),
+              (async () => {
+  const deviceFingerprint = await biometricService.getDeviceFingerprint();
+  await biometricService.enableBiometric(
+    newTokens.refresh_token,
+    newTokens.access_token,
+    deviceFingerprint
+  );
+})(), // Update stored token
+            ]);
+
+            // Update state with new session
+            dispatch({
+              type: 'LOGIN_SUCCESS',
+              payload: { user, tokens: newTokens },
+            });
+
+            console.log('✅ Session recovered silently using biometric token!');
+            
+            // Don't show alert - silent recovery
+            console.log('ℹ️ User can continue using the app without interruption');
+            
+            // SUCCESS - Session recovered, don't log out
+            isSessionExpiring.current = false;
+            return;
+            
+          } catch (refreshError) {
+            console.log('❌ Refresh token also expired (after 30 days)');
+            // Refresh token expired - need full login
+            // Fall through to logout but KEEP biometric enabled
+          }
+        }
+      } catch (biometricError) {
+        console.log('⚠️ Biometric recovery failed:', biometricError);
+        // Fall through to logout
+      }
+    }
+    
+    // STEP 3: Logout but PRESERVE biometric token
+    console.log('🚪 Logging out but keeping biometric enabled...');
+    
+    // Clear auth data (tokens, user data)
+    await AuthStorage.clearAuthData();
+    
+    // ✅ IMPORTANT: Don't clear biometric token!
+    // The biometric token (refresh token) is still valid for 30 days
+    // User can login with fingerprint without needing password + OTP
+    console.log('✅ Biometric token preserved - fingerprint login will still work');
+    
+    stopPeriodicSessionCheck();
+    dispatch({ type: 'SESSION_EXPIRED' });
+
+    if (navigationRef.current) {
+      navigationRef.current.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+
+    // Show alert after navigation - inform user they can use fingerprint
+    setTimeout(() => {
+      if (hasBiometric) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. You can login again with your fingerprint.',
+          [{ text: 'OK' }],
+          { cancelable: false }
         );
-      }
-
-      setTimeout(() => {
+      } else {
         Alert.alert(
           'Session Expired',
           'Your session has expired. Please log in again.',
-          [{ text: 'Login', onPress: () => {} }],
+          [{ text: 'OK' }],
           { cancelable: false }
         );
-      }, 300);
-
-    } catch (error) {
-      console.error('Error handling session expiry:', error);
-    } finally {
-      isSessionExpiring.current = false;
-    }
-  };
-
-  const startPeriodicSessionCheck = () => {
-    if (sessionCheckInterval.current) {
-      clearInterval(sessionCheckInterval.current);
-    }
-
-    console.log('🔄 Starting periodic session checks with User-Agent...');
-    sessionCheckInterval.current = setInterval(async () => {
-      if (state.isAuthenticated && state.tokens?.access_token && !isSessionExpiring.current) {
-        const isValid = await validateCurrentSession();
-        if (!isValid) {
-          await handleSessionExpired();
-        }
       }
-    }, EXTENDED_SESSION_CONFIG.PERIODIC_CHECK_INTERVAL);
-  };
+    }, 300);
+
+  } catch (error) {
+    console.error('Error handling session expiry:', error);
+    
+    // On error, still preserve biometric if possible
+    const hasBiometric = await biometricService.isBiometricEnabled().catch(() => false);
+    
+    await AuthStorage.clearAuthData();
+    stopPeriodicSessionCheck();
+    dispatch({ type: 'SESSION_EXPIRED' });
+    
+    if (navigationRef.current) {
+      navigationRef.current.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+    
+    console.log(`✅ Biometric preserved: ${hasBiometric}`);
+    
+  } finally {
+    isSessionExpiring.current = false;
+  }
+};
+
+  // const startPeriodicSessionCheck = () => {
+  //   if (sessionCheckInterval.current) {
+  //     clearInterval(sessionCheckInterval.current);
+  //   }
+
+  //   console.log('🔄 Starting periodic session checks with User-Agent...');
+  //   sessionCheckInterval.current = setInterval(async () => {
+  //     if (state.isAuthenticated && state.tokens?.access_token && !isSessionExpiring.current) {
+  //       const isValid = await validateCurrentSession();
+  //       if (!isValid) {
+  //         await handleSessionExpired();
+  //       }
+  //     }
+  //   }, EXTENDED_SESSION_CONFIG.PERIODIC_CHECK_INTERVAL);
+  // };
 
   const stopPeriodicSessionCheck = () => {
     if (sessionCheckInterval.current) {
@@ -260,6 +422,13 @@ export function AuthProvider(props: AuthProviderProps) {
       console.log('🛑 Stopped periodic session checks');
     }
   };
+
+
+const startPeriodicSessionCheck = () => {
+  // Disabled: Mobile app now works like web app
+  // Tokens refresh automatically during API calls, not on a timer
+  console.log('ℹ️ Session management: On-demand refresh (web app style)');
+};
 
   const validateSessionBeforeRequest = async (): Promise<boolean> => {
     if (!state.isAuthenticated || !state.tokens?.access_token) {
@@ -293,179 +462,334 @@ export function AuthProvider(props: AuthProviderProps) {
     }
   };
 
-  const checkAuthStatus = async () => {
+const checkAuthStatus = async () => {
+  try {
+    // Don't restore session if user intentionally logged out
+    if (intentionalLogout.current) {
+      console.log('⛔ Skipping session restoration - user logged out');
+      dispatch({ type: 'SET_LOADING', payload: false });
+      intentionalLogout.current = false;
+      return;
+    }
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    // Check if biometric is enabled FIRST
+   // Check if biometric is enabled
+const hasBiometric = await biometricService.isBiometricEnabled();
+
+if (hasBiometric) {
+  console.log('🔐 Biometric is enabled, validating stored token...');
+  
+  // Get stored refresh token
+  const storedRefreshToken = await biometricService.getStoredToken();
+  
+  if (!storedRefreshToken) {
+    console.log('❌ No stored refresh token found');
+    await biometricService.disableBiometric();
+    await AuthStorage.clearAuthData();
+    dispatch({ type: 'SET_LOADING', payload: false });
+    return;
+  }
+  
+  // Try to validate the refresh token SILENTLY
+  try {
+    console.log('🔄 Testing if refresh token is still valid...');
+    const newTokens = await authApiClient.refreshToken(storedRefreshToken);
+    const userData = await AuthStorage.getUserData();
+    
+    if (!userData) {
+      // No user data, need fresh login
+      console.log('❌ No user data found');
+      await biometricService.disableBiometric();
+      await AuthStorage.clearAuthData();
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+    
+    // Token is valid! Update storage and let LoginScreen show biometric prompt
+    await AuthStorage.saveTokens(newTokens);
+const deviceFingerprint = await biometricService.getDeviceFingerprint();
+await biometricService.enableBiometric(
+  newTokens.refresh_token,
+  newTokens.access_token,
+  deviceFingerprint
+); // Update stored token    
+    console.log('✅ Refresh token is valid, biometric login available');
+    dispatch({ type: 'SET_LOADING', payload: false });
+    return;
+    
+  } catch (refreshError) {
+    // Token expired - clear biometric and force password login
+    console.log('❌ Refresh token expired, clearing biometric data');
+    console.log('🔓 User must login with password to re-enable biometric');
+    
+    await biometricService.disableBiometric();
+    await AuthStorage.clearAuthData();
+    
+    dispatch({ type: 'SET_LOADING', payload: false });
+    return;
+  }
+}
+    // Only check stored auth if biometric is NOT enabled
+    const hasStoredAuth = await AuthStorage.hasAuthData();
+
+    if (!hasStoredAuth) {
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+
+    const { accessToken, refreshToken } = await AuthStorage.getTokens();
+    const userData = await AuthStorage.getUserData();
+
+    if (!accessToken || !userData || !refreshToken) {
+      console.log('❌ Missing auth data, clearing storage');
+      await AuthStorage.clearAuthData();
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+
+    // Try to refresh the token
     try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-
-      const hasStoredAuth = await AuthStorage.hasAuthData();
-
-      if (!hasStoredAuth) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return;
-      }
-
-      const { accessToken, refreshToken } = await AuthStorage.getTokens();
-      const userData = await AuthStorage.getUserData();
-
-      if (!accessToken || !userData) {
-        await AuthStorage.clearAuthData();
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return;
-      }
+      console.log('🔄 Validating stored session...');
+      const newTokens = await authApiClient.refreshToken(refreshToken);
+      
+      await AuthStorage.saveTokens(newTokens);
 
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
           user: userData,
-          tokens: {
-            access_token: accessToken,
-            refresh_token: refreshToken || '',
-            token_type: 'bearer',
-          },
+          tokens: newTokens,
         },
       });
 
-      const isValid = await validateCurrentSession();
-
-      if (isValid) {
-        startPeriodicSessionCheck();
-      } else {
-        if (refreshToken) {
-          try {
-            console.log('🔄 Refreshing token with User-Agent...');
-            const newTokens = await authApiClient.refreshToken(refreshToken);
-            await AuthStorage.saveTokens(newTokens);
-
-            dispatch({
-              type: 'TOKEN_REFRESHED',
-              payload: newTokens,
-            });
-
-            startPeriodicSessionCheck();
-          } catch (error) {
-            await AuthStorage.clearAuthData();
-            dispatch({ type: 'LOGOUT' });
-          }
-        } else {
-          await AuthStorage.clearAuthData();
-          dispatch({ type: 'LOGOUT' });
-        }
-      }
-    } catch (error) {
+      startPeriodicSessionCheck();
+      console.log('✅ Session restored successfully');
+      
+    } catch (refreshError) {
+      console.log('❌ Session expired, clearing auth data');
       await AuthStorage.clearAuthData();
       dispatch({ type: 'LOGOUT' });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+
+  } catch (error) {
+    console.log('❌ Error checking auth status:', error);
+    await AuthStorage.clearAuthData();
+    dispatch({ type: 'LOGOUT' });
+  } finally {
+    dispatch({ type: 'SET_LOADING', payload: false });
+  }
+};
 
   /**
    * SIMPLIFIED LOGIN - Try direct login first (like web app)
    * This is the main login method that most users will use
    */
-  const login = async (email: string, password: string) => {
+const login = async (email: string, password: string) => {
+  try {
+    console.log('=== 📱 MOBILE LOGIN WITH USER-AGENT ===');
+    console.log('Email:', email);
+    console.log('📱 MOBILE APP LOGIN ATTEMPT');
+    console.log('📱 User:', email);
+    console.log('📱 Platform: Android React Native');
+    console.log('📱 App: ToshibaChatbot Mobile');
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    // Step 1: Try direct login (most users don't need MFA)
     try {
-      console.log('=== 📱 MOBILE LOGIN WITH USER-AGENT ===');
-      console.log('Email:', email);
-      console.log('📱 MOBILE APP LOGIN ATTEMPT');
-      console.log('📱 User:', email);
-      console.log('📱 Platform: Android React Native');
-      console.log('📱 App: ToshibaChatbot Mobile');
+      console.log('🚀 Attempting direct login with User-Agent...');
+      const tokens = await authApiClient.login(email, password);
+      
+      console.log('✅ Login successful, getting user details...');
+      const user = await authApiClient.getUserDetails(tokens.access_token);
 
-      dispatch({ type: 'SET_LOADING', payload: true });
+      await Promise.all([
+        AuthStorage.saveTokens(tokens),
+        AuthStorage.saveUserData(user),
+      ]);
 
-      // Step 1: Try direct login (most users don't need MFA)
+const wasBiometricEnabled = await biometricService.isBiometricEnabled();
+if (wasBiometricEnabled) {
+  console.log('🔐 Updating biometric token with new refresh token');
+  const deviceFingerprint = await biometricService.getDeviceFingerprint();
+  await biometricService.enableBiometric(
+    tokens.refresh_token,
+    tokens.access_token,
+    deviceFingerprint
+  );
+}
+
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: { user, tokens },
+      });
+
+      await logAuthToBackend('password', user.email);
+
+      
+  console.log('✅ MOBILE LOGIN SUCCESS');
+console.log('✅ User authenticated:', user.email);
+console.log('✅ Device: Android Mobile App');
+
+// Check if password change is required
+if (tokens.password_change_required) {
+  if (navigationRef.current) {
+    navigationRef.current.dispatch(
+      CommonActions.navigate('ResetPassword')
+    );
+  }
+  return;
+}
+
+await logAuthToBackend('fingerprint', user.email);
+
+
+startPeriodicSessionCheck();
+
+// Navigate to Home screen FIRST
+if (navigationRef.current) {
+  navigationRef.current.dispatch(
+    CommonActions.reset({
+      index: 0,
+      routes: [{ name: 'Home' }],
+    })
+  );
+}
+
+console.log('=== ✅ MOBILE LOGIN SUCCESS WITH USER-AGENT ===');
+
+// BIOMETRIC ENROLLMENT - Show AFTER navigation completes
+setTimeout(async () => {
+  try {
+    const { available } = await biometricService.isBiometricAvailable();
+    const isBiometricEnabled = await biometricService.isBiometricEnabled();
+    
+    // ✅ NEW: Check backend status first
+    const backendBiometricEnabled = await checkBackendBiometricStatus(tokens.access_token);
+    
+    console.log('🔍 Biometric Check:', { 
+      available, 
+      isBiometricEnabled, 
+      backendBiometricEnabled 
+    });
+    
+    // ✅ UPDATED: Only show prompt if backend has biometric enabled
+    if (available && !isBiometricEnabled && backendBiometricEnabled) {
+      // Wait for Home screen to be fully visible
+      await new Promise(r => setTimeout(r, 1500));
+      
+      console.log('📱 Showing biometric enrollment prompt...');
+      
+      // STEP 1: Show enrollment prompt and wait for user choice
+      const userWantsToEnable = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Enable Quick Login?',
+          'Use your fingerprint to login instantly without entering your password or verification codes. This works only on this device.',
+          [
+            {
+              text: 'Not Now',
+              style: 'cancel',
+              onPress: () => {
+                console.log('ℹ️ User declined biometric enrollment');
+                resolve(false);
+              },
+            },
+            {
+              text: 'Enable',
+              onPress: () => {
+                console.log('✅ User chose to enable biometric');
+                resolve(true);
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      });
+      
+      if (!userWantsToEnable) {
+        return; // User declined
+      }
+      
+      // STEP 2: Trigger biometric enrollment (fingerprint scan)
+      console.log('🔐 Starting biometric enrollment...');
+      let enrollmentSuccess = false;
+      let enrollmentError: string | null = null;
+
       try {
-        console.log('🚀 Attempting direct login with User-Agent...');
-        const tokens = await authApiClient.login(email, password);
+        const deviceFingerprint = await biometricService.getDeviceFingerprint();
+        const success = await biometricService.enableBiometric(
+          tokens.refresh_token,
+          tokens.access_token,
+          deviceFingerprint
+        );
+        enrollmentSuccess = success;
         
-        console.log('✅ Login successful, getting user details...');
-        const user = await authApiClient.getUserDetails(tokens.access_token);
-
-        await Promise.all([
-          AuthStorage.saveTokens(tokens),
-          AuthStorage.saveUserData(user),
-        ]);
-
-        dispatch({
-          type: 'LOGIN_SUCCESS',
-          payload: { user, tokens },
-        });
-        console.log('✅ MOBILE LOGIN SUCCESS');
-        console.log('✅ User authenticated:', user.email);
-        console.log('✅ Device: Android Mobile App');
-        // Check if password change is required
-        if (tokens.password_change_required) {
-          if (navigationRef.current) {
-            navigationRef.current.dispatch(
-              CommonActions.navigate('ResetPassword')
-            );
-          }
-          return;
+        if (success) {
+          console.log('✅ Biometric enrollment successful');
+        } else {
+          console.log('❌ Biometric enrollment failed');
+          enrollmentError = 'Enrollment failed';
         }
-
-        startPeriodicSessionCheck();
-
-        // Navigate to home
-        if (navigationRef.current) {
-          navigationRef.current.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            })
-          );
+      } catch (enrollError) {
+        console.log('❌ Biometric enrollment error:', enrollError);
+        const errorMessage = enrollError instanceof Error ? enrollError.message : '';
+        
+        // User cancelled the fingerprint scan
+        if (errorMessage.toLowerCase().includes('cancel')) {
+          console.log('ℹ️ User cancelled fingerprint scan');
+          return; // Don't show error for cancellation
         }
+        
+        enrollmentError = errorMessage || 'Unknown error';
+      }
+      
+      // STEP 3: Wait for fingerprint scanner to fully dismiss
+      console.log('⏳ Waiting for fingerprint scanner to dismiss...');
+      await new Promise(r => setTimeout(r, 800));
+      
+      // STEP 4: Show result Alert (only ONE at a time)
+      if (enrollmentSuccess) {
+        Alert.alert(
+          'Success!',
+          'Fingerprint login is now enabled. Next time you can login with just your fingerprint.',
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+      } else if (enrollmentError) {
+        Alert.alert(
+          'Setup Failed',
+          'Could not enable fingerprint login. You can try again from Settings.',
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+      }
+    } else if (available && !backendBiometricEnabled) {
+      console.log('⚠️ Biometric disabled on backend - skipping enrollment prompt');
+    }
+  } catch (error) {
+    console.log('⚠️ Biometric enrollment check failed:', error);
+  }
+}, 1000); // Run after 1 second delay
 
-        console.log('=== ✅ MOBILE LOGIN SUCCESS WITH USER-AGENT ===');
-        return;
+return; // Return immediately, don't wait for biometric
 
-      } catch (loginError) {
-        if (loginError instanceof Error) {
-          console.log('Login error caught:', loginError.message);
+return; // Return immediately, don't wait for biometric
+    } catch (loginError) {
+      if (loginError instanceof Error) {
+        console.log('Login error caught:', loginError.message);
+        
+        // Handle MFA requirements
+        if (loginError.message === 'MFA_REQUIRED_EMAIL') {
+          console.log('📧 Email MFA required, sending email code...');
           
-          // Handle MFA requirements
-          if (loginError.message === 'MFA_REQUIRED_EMAIL') {
-            console.log('📧 Email MFA required, sending email code...');
+          try {
+            // Send the email code
+            await authApiClient.sendLoginCode(email, password);
+            console.log('✅ Email code sent successfully');
             
-            try {
-              // Send the email code
-              await authApiClient.sendLoginCode(email, password);
-              console.log('✅ Email code sent successfully');
-              
-              // Store credentials for OTP flow
-              dispatch({
-                type: 'OTP_SENT',
-                payload: { email, password }
-              });
-
-              // Navigate to OTP screen
-              if (navigationRef.current) {
-                navigationRef.current.dispatch(
-                  CommonActions.navigate('OTPScreen')
-                );
-              }
-              return;
-            } catch (emailError) {
-              console.log('❌ Failed to send email code:', emailError);
-              // If sending email fails, still navigate to OTP screen but show error
-              dispatch({
-                type: 'OTP_SENT',
-                payload: { email, password }
-              });
-              
-              if (navigationRef.current) {
-                navigationRef.current.dispatch(
-                  CommonActions.navigate('OTPScreen')
-                );
-              }
-              return;
-            }
-          }
-
-          if (loginError.message === 'MFA_REQUIRED_TOTP') {
-            console.log('🔐 TOTP MFA required, switching to OTP flow...');
-            
-            // For TOTP, no email sending needed
+            // Store credentials for OTP flow
             dispatch({
               type: 'OTP_SENT',
               payload: { email, password }
@@ -478,20 +802,53 @@ export function AuthProvider(props: AuthProviderProps) {
               );
             }
             return;
+          } catch (emailError) {
+            console.log('❌ Failed to send email code:', emailError);
+            // If sending email fails, still navigate to OTP screen but show error
+            dispatch({
+              type: 'OTP_SENT',
+              payload: { email, password }
+            });
+            
+            if (navigationRef.current) {
+              navigationRef.current.dispatch(
+                CommonActions.navigate('OTPScreen')
+              );
+            }
+            return;
           }
-
-          // Handle other login errors
-          throw loginError;
         }
-      }
 
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      console.log('❌ Login error:', errorMessage);
-      dispatch({ type: 'LOGIN_ERROR', payload: errorMessage });
-      throw error;
+        if (loginError.message === 'MFA_REQUIRED_TOTP') {
+          console.log('🔐 TOTP MFA required, switching to OTP flow...');
+          
+          // For TOTP, no email sending needed
+          dispatch({
+            type: 'OTP_SENT',
+            payload: { email, password }
+          });
+
+          // Navigate to OTP screen
+          if (navigationRef.current) {
+            navigationRef.current.dispatch(
+              CommonActions.navigate('OTPScreen')
+            );
+          }
+          return;
+        }
+
+        // Handle other login errors
+        throw loginError;
+      }
     }
-  };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Login failed';
+    console.log('❌ Login error:', errorMessage);
+    dispatch({ type: 'LOGIN_ERROR', payload: errorMessage });
+    throw error;
+  }
+};
 
   /**
    * LEGACY: Step 1 - Send OTP to email (for MFA users only)
@@ -605,36 +962,45 @@ export function AuthProvider(props: AuthProviderProps) {
       throw error;
     }
   };
-
-  const logout = async () => {
-    try {
-      console.log('👋 Logging out with User-Agent...');
-      if (state.tokens?.access_token) {
-        try {
-          await authApiClient.logout(state.tokens.access_token);
-        } catch (error) {
-          console.warn('Server logout failed, but continuing with local logout');
-        }
+const logout = async () => {
+  try {
+    console.log('👋 Logging out...');
+    
+    // Mark as intentional logout
+    intentionalLogout.current = true;
+    
+    // DON'T clear biometric on logout
+    console.log('ℹ️ Keeping biometric enabled for next login');
+    
+    // Server logout
+    if (state.tokens?.access_token) {
+      try {
+        await authApiClient.logout(state.tokens.access_token);
+      } catch (error) {
+        console.warn('Server logout failed, continuing with local logout');
       }
-    } catch (error) {
-      console.warn('Logout error:', error);
-    } finally {
-      await AuthStorage.clearAuthData();
-      stopPeriodicSessionCheck();
-      dispatch({ type: 'LOGOUT' });
-      
-      if (navigationRef.current) {
-        navigationRef.current.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
-        );
-      }
-      console.log('✅ Logout completed');
     }
-  };
-
+  } catch (error) {
+    console.warn('Logout error:', error);
+  } finally {
+    // Clear storage (but NOT biometric)
+    await AuthStorage.clearAuthData();
+    stopPeriodicSessionCheck();
+    
+    dispatch({ type: 'LOGOUT' });
+    
+    if (navigationRef.current) {
+      navigationRef.current.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+    
+    console.log('✅ Logout completed');
+  }
+};
   const clearError = () => {
     dispatch({ type: 'CLEAR_ERROR' });
   };
@@ -702,6 +1068,167 @@ export function AuthProvider(props: AuthProviderProps) {
     }
   };
 
+  const checkBiometricAvailability = useCallback(async () => {
+  const { available, biometryType } = await biometricService.isBiometricAvailable();
+  console.log('Biometric available:', available, 'Type:', biometryType);
+  return { available, biometryType };
+}, []);
+
+const checkBackendBiometricStatus = useCallback(async (accessToken: string): Promise<boolean> => {
+  try {
+    console.log('🔍 Checking backend biometric status...');
+    const response = await fetch(`${API_CONFIG.AUTH_API_BASE_URL}/api/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Tenant-ID': API_CONFIG.TENANT_ID,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.log('❌ Failed to check backend status');
+      return false;
+    }
+
+    const userData = await response.json();
+    const isEnabled = userData.biometric_mfa_enabled === true;
+    console.log(`✅ Backend biometric status: ${isEnabled}`);
+    return isEnabled;
+  } catch (error) {
+    console.log('❌ Error checking backend biometric status:', error);
+    return false;
+  }
+}, []);
+
+const enableBiometric = useCallback(async () => {
+  if (!state.tokens?.refresh_token || !state.tokens?.access_token) {
+    throw new Error('No tokens available');
+  }
+
+  try {
+    // Get device fingerprint
+    const deviceFingerprint = await biometricService.getDeviceFingerprint();
+    
+    // Enable biometric with backend registration
+    const success = await biometricService.enableBiometric(
+      state.tokens.refresh_token,
+      state.tokens.access_token,
+      deviceFingerprint
+    );
+    
+    if (success) {
+      console.log('✅ Biometric enabled successfully');
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Failed to enable biometric:', error);
+    throw error;
+  }
+}, [state.tokens]);
+
+const loginWithBiometric = useCallback(async () => {
+  try {
+    console.log('🔐 Attempting biometric login...');
+    
+    const refreshToken = await biometricService.authenticateAndGetToken();
+    
+    if (!refreshToken) {
+      throw new Error('Biometric authentication failed');
+    }
+
+    console.log('✅ Biometric auth successful, refreshing tokens...');
+    
+    // Get device fingerprint
+    const deviceFingerprint = await biometricService.getDeviceFingerprint();
+
+    // Try device-validated refresh first
+    let newTokens: TokenResponse;
+    try {
+      newTokens = await authApiClient.refreshTokenWithDevice(refreshToken, deviceFingerprint);
+      console.log('✅ Device validation successful');
+    } catch (deviceError) {
+      console.log('⚠️ Device validation failed, falling back to regular refresh');
+      newTokens = await authApiClient.refreshToken(refreshToken);
+    }
+
+    const user = await authApiClient.getUserDetails(newTokens.access_token);
+
+// ✅ Just log, don't block biometric login based on backend flag
+if (!user.biometric_mfa_enabled) {
+  console.log('ℹ️ Backend biometric flag is false');
+  console.log('ℹ️ Allowing login - device has valid local credential');
+  console.log('ℹ️ Backend flag only controls email OTP skip during password login');
+} else {
+  console.log('✅ Backend biometric flag is true');
+}
+
+console.log('✅ Biometric login proceeding with local device credential');
+
+    // Continue with normal login flow...
+    await Promise.all([
+      AuthStorage.saveTokens(newTokens),
+      AuthStorage.saveUserData(user),
+      (async () => {
+        const deviceFingerprint = await biometricService.getDeviceFingerprint();
+        await biometricService.enableBiometric(
+          newTokens.refresh_token,
+          newTokens.access_token,
+          deviceFingerprint
+        );
+      })(),
+    ]);
+
+    dispatch({
+      type: 'LOGIN_SUCCESS',
+      payload: { user, tokens: newTokens },
+    });
+
+    startPeriodicSessionCheck();
+
+    if (navigationRef.current) {
+      navigationRef.current.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        })
+      );
+    }
+
+    console.log('✅ Biometric login completed (client-side)');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Biometric login failed:', error);
+    throw error;
+  }
+}, []);
+
+// Add this function inside AuthProvider, around line 900
+const clearAllAuthData = async () => {
+  try {
+    console.log('🧹 Clearing ALL auth data...');
+    
+    // Clear biometric
+await biometricService.disableBiometric(state.tokens?.access_token);
+    
+    // Clear auth storage
+    await AuthStorage.clearAuthData();
+    
+    // Reset state
+    dispatch({ type: 'LOGOUT' });
+    
+    console.log('✅ All auth data cleared');
+    
+    Alert.alert(
+      'Data Cleared',
+      'All stored authentication data has been cleared. Please login again.',
+      [{ text: 'OK' }]
+    );
+  } catch (error) {
+    console.error('Error clearing auth data:', error);
+  }
+};
   // Test User-Agent function
   const testUserAgent = useCallback(async () => {
     try {
@@ -780,6 +1307,10 @@ export function AuthProvider(props: AuthProviderProps) {
     resetPassword,
     changePasswordUser,
     forgotPassword,
+    checkBiometricAvailability,  
+    enableBiometric,              
+    loginWithBiometric,    
+    clearAllAuthData       
   };
 
   return (

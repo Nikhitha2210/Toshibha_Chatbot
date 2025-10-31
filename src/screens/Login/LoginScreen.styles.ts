@@ -155,6 +155,67 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         color: Colors.dark.primary,
     },
+    // NEW STYLES FOR BIOMETRIC FALLBACK
+    biometricFallbackContainer: {
+        marginTop: 20,
+        padding: 16,
+        backgroundColor: Colors.dark.background3,
+        borderRadius: 10,
+        borderLeftWidth: 4,
+        borderLeftColor: Colors.dark.primary,
+    },
+    biometricFallbackTitle: {
+        color: Colors.dark.text,
+        fontSize: 15,
+        marginBottom: 8,
+        fontWeight: '600',
+    },
+    biometricFallbackDescription: {
+        color: Colors.dark.subText,
+        fontSize: 13,
+        marginBottom: 14,
+        lineHeight: 18,
+    },
+    biometricRetryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 13,
+        backgroundColor: Colors.dark.primary,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    biometricRetryIcon: {
+        marginRight: 8,
+    },
+    biometricRetryText: {
+        color: Colors.dark.text,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    biometricPasswordLink: {
+        alignItems: 'center',
+        padding: 8,
+    },
+    biometricPasswordLinkText: {
+        color: Colors.dark.primary,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    eyeIconContainer: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    errorContainer: {
+        backgroundColor: '#ffebee',
+        padding: 10,
+        borderRadius: 5,
+        marginBottom: 10,
+    },
+    errorText: {
+        color: '#c62828',
+        fontSize: 14,
+    },
 });
 
 export default styles;

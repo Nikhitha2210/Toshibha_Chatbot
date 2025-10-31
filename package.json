@@ -1,5 +1,5 @@
 {
-  "name": "Field Service Assistant",
+  "name": "field-service-assistant",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -24,6 +24,7 @@
     "react-native": "0.79.2",
     "react-native-asset": "^2.1.1",
     "react-native-avoid-softinput": "^7.0.1",
+    "react-native-biometrics": "^3.0.1",
     "react-native-device-info": "^14.0.4",
     "react-native-gesture-handler": "^2.25.0",
     "react-native-image-pan-zoom": "^2.1.12",

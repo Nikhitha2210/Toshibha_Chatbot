@@ -43,7 +43,7 @@ constructor(baseUrl: string, tenantId: string = "default", timeout?: number) {
     return {
       "Content-Type": "application/json",
       "X-Tenant-ID": this.tenantId,
-      "User-Agent": this.userAgent,
+      // "User-Agent": this.userAgent,
       "X-Client-Source": "ToshibaChatbot-Mobile",
       "X-Platform": "Android", 
       "X-App-Type": "ReactNative",
@@ -301,7 +301,8 @@ async extendSession(accessToken: string): Promise<void> {
       console.log('User-Agent:', this.userAgent);
 
       // Use correct production endpoint (same as web app)
-      const emailMfaUrl = 'https://tgcs.iopex.ai/api/email-mfa/send-login-code';
+      //const emailMfaUrl = 'https://tgcs.iopex.ai/api/email-mfa/send-login-code';
+      const emailMfaUrl = 'https://tgcs-testing.iopex.ai/api/email-mfa/send-login-code';
       console.log('Email MFA URL (Production):', emailMfaUrl);
 
       const requestBody = {
@@ -508,6 +509,49 @@ async extendSession(accessToken: string): Promise<void> {
     }
   }
 
+  /**
+   * Refresh access token with device validation (for biometric MFA)
+   */
+  async refreshTokenWithDevice(refreshToken: string, deviceFingerprint: string): Promise<TokenResponse> {
+    try {
+      console.log('=== REFRESHING TOKEN WITH DEVICE VALIDATION ===');
+      console.log('Device Fingerprint:', deviceFingerprint.substring(0, 20) + '...');
+      console.log('User-Agent:', this.userAgent);
+      
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/auth/refresh`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ 
+          refresh_token: refreshToken,
+          device_fingerprint: deviceFingerprint 
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Your session has expired. Please log in again.');
+        }
+        
+        if (response.status === 403) {
+          throw new Error('Device not recognized. Please log in with your password.');
+        }
+        
+        if (response.status >= 500) {
+          throw new Error('Server is temporarily unavailable. Please try again later.');
+        }
+        
+        throw new Error('Failed to refresh session. Please log in again.');
+      }
+
+      const tokenData = await response.json();
+      return tokenData as TokenResponse;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while refreshing session');
+    }
+  }
   /**
    * Logout
    */
