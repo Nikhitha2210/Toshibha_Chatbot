@@ -26,6 +26,7 @@ import IconAssets from '../../assets/icons/IconAssets';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTE_NAMES } from '../../navigation/constants';
 import { biometricService } from '../../services/biometric/BiometricService';
+import { AuthStorage } from '../../services/auth/storage';
 
 type RootStackParamList = {
   Login: undefined;
@@ -36,7 +37,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const APP_VERSION = "1.14-TEST2";
+const APP_VERSION = "1.16-test";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -47,6 +48,8 @@ const LoginScreen = () => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [androidVersion, setAndroidVersion] = useState(0);
   const [biometricChecked, setBiometricChecked] = useState(false);
+  const [storedEmail, setStoredEmail] = useState('');
+  const [isLoadingStoredEmail, setIsLoadingStoredEmail] = useState(true);
 
   const navigation = useNavigation<NavigationProp>();
   const { login, state, clearError, loginWithBiometric } = useAuth();
@@ -74,6 +77,43 @@ const LoginScreen = () => {
       };
     }
   }, []);
+
+// Load stored email if biometric is enabled
+useEffect(() => {
+  const loadStoredEmail = async () => {
+    try {
+      setIsLoadingStoredEmail(true);
+      
+      // Check if biometric is enabled
+      const isBiometricEnabled = await biometricService.isBiometricEnabled();
+      
+      if (isBiometricEnabled) {
+        // ✅ FIX: Get email from biometric service, not AuthStorage
+        const biometricEmail = await biometricService.getBiometricUserEmail();
+        
+        if (biometricEmail) {
+          setStoredEmail(biometricEmail);
+          setEmail(biometricEmail); // Pre-fill with biometric user's email
+          console.log('✅ Pre-filled email for biometric user:', biometricEmail);
+        } else {
+          // Biometric enabled but no email stored - security issue
+          console.log('⚠️ Biometric enabled but no user email - clearing');
+          await biometricService.disableBiometric();
+          setStoredEmail('');
+        }
+      } else {
+        // Clear if biometric is not enabled
+        setStoredEmail('');
+      }
+    } catch (error) {
+      console.error('Error loading stored email:', error);
+    } finally {
+      setIsLoadingStoredEmail(false);
+    }
+  };
+  
+  loadStoredEmail();
+}, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -252,6 +292,8 @@ const LoginScreen = () => {
               version={APP_VERSION}
               passwordInputRef={passwordInputRef}
               scrollViewRef={scrollViewRef}
+              storedEmail={storedEmail}
+              setStoredEmail={setStoredEmail}
             />
           </ScrollView>
         </View>
@@ -264,7 +306,7 @@ const LoginContent = ({
   email, setEmail, password, setPassword, emailError, setEmailError,
   passwordError, setPasswordError, showPassword, setShowPassword,
   handleSignIn, handleGoogleSignIn, state, clearError, version,
-  passwordInputRef, scrollViewRef
+  passwordInputRef, scrollViewRef, storedEmail, setStoredEmail
 }: any) => {
   const navigation = useNavigation<any>();
 
@@ -293,22 +335,27 @@ const LoginContent = ({
           <View style={[styles.inputWrapper, emailError && { borderColor: 'red', borderWidth: 1 }]}>
             <IconAssets.Mail style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={Colors.dark.subText}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setEmailError(false);
-                clearError();
-              }}
-              onSubmitEditing={handleEmailSubmit}
-              returnKeyType="next"
-              blurOnSubmit={false}
-            />
+  style={[
+    styles.input, 
+    storedEmail && { color: Colors.dark.subText, opacity: 0.7 }
+  ]}
+  placeholder="Email"
+  placeholderTextColor={Colors.dark.subText}
+  keyboardType="email-address"
+  autoCapitalize="none"
+  autoCorrect={false}
+  value={email}
+  editable={true}  // ✅ ALWAYS EDITABLE
+  onChangeText={(text) => {
+    setEmail(text);
+    setStoredEmail(''); // ✅ Clear stored email when user types
+    setEmailError(false);
+    clearError();
+  }}
+  onSubmitEditing={handleEmailSubmit}
+  returnKeyType="next"
+  blurOnSubmit={false}
+/>
           </View>
 
           <View style={[styles.inputWrapper, passwordError && { borderColor: 'red', borderWidth: 1 }]}>

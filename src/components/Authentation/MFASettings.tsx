@@ -17,6 +17,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { biometricService } from '../../services/biometric/BiometricService';
 import { API_CONFIG } from '../../config/environment';
 import EmailVerificationModal from '../../components/Authentation/EmailVerificationModal';
+import { debugBiometricStatus } from '../../utils/biometricDebug';
 
 const MFASettings = () => {
   const navigation = useNavigation<any>();
@@ -38,31 +39,58 @@ const MFASettings = () => {
     loadMfaStatus();
   }, []);
 
-  const loadMfaStatus = async () => {
-    try {
-      setLoading(true);
+const loadMfaStatus = async () => {
+  try {
+    setLoading(true);
 
-      // Load Email MFA status from user data
-      if (state.user) {
-        setEmailMfaEnabled(state.user.email_mfa_enabled || false);
-      }
-
-      // Check biometric availability
-      const { available } = await biometricService.isBiometricAvailable();
-      setBiometricAvailable(available);
-
-      if (available) {
-        const enabled = await biometricService.isBiometricEnabled();
-        setBiometricEnabled(enabled);
-      }
-
-    } catch (error) {
-      console.error('Error loading MFA status:', error);
-      Alert.alert('Error', 'Failed to load MFA settings');
-    } finally {
-      setLoading(false);
+    if (state.user?.id) {
+      await debugBiometricStatus(String(state.user.id));
     }
-  };
+
+    // Load Email MFA status from user data
+    if (state.user) {
+      setEmailMfaEnabled(state.user.email_mfa_enabled || false);
+    }
+
+    // Check biometric availability
+    const { available } = await biometricService.isBiometricAvailable();
+    setBiometricAvailable(available);
+
+    if (available && state.user) {
+      // ✅ FIX: Check if biometric is for THIS user
+      const localEnabled = await biometricService.isBiometricEnabled();
+      const storedEmail = await biometricService.getBiometricUserEmail();
+      const backendEnabled = state.user.biometric_mfa_enabled || false;
+      
+      console.log('🔍 MFA Settings - Local enabled:', localEnabled);
+      console.log('🔍 MFA Settings - Stored email:', storedEmail);
+      console.log('🔍 MFA Settings - Current user:', state.user.email);
+      console.log('🔍 MFA Settings - Backend enabled:', backendEnabled);
+      
+      // Only show as enabled if email matches current user
+      const emailMatches = storedEmail?.toLowerCase() === state.user.email?.toLowerCase();
+      const actuallyEnabled = localEnabled && emailMatches && backendEnabled;
+      
+      console.log('🔍 MFA Settings - Email matches:', emailMatches);
+      console.log('🔍 MFA Settings - Final state:', actuallyEnabled);
+      
+      // If local says enabled but email doesn't match, clear it
+      if (localEnabled && !emailMatches) {
+        console.log('⚠️ Biometric email mismatch - clearing local data');
+        await biometricService.disableBiometric();
+        setBiometricEnabled(false);
+      } else {
+        setBiometricEnabled(actuallyEnabled);
+      }
+    }
+
+  } catch (error) {
+    console.error('Error loading MFA status:', error);
+    Alert.alert('Error', 'Failed to load MFA settings');
+  } finally {
+    setLoading(false);
+  }
+};
 
  // ===== EMAIL MFA =====
 const handleEmailMfaToggle = async (value: boolean) => {
@@ -191,7 +219,8 @@ const handleBiometricToggle = async (value: boolean) => {
       const success = await biometricService.enableBiometric(
         state.tokens.refresh_token,
         state.tokens.access_token,
-        deviceFingerprint
+        deviceFingerprint,
+        state.user?.email || ''
       );
       
       if (success) {

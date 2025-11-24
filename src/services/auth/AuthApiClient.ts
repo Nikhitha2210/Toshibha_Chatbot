@@ -34,7 +34,7 @@ constructor(baseUrl: string, tenantId: string = "default", timeout?: number) {
       console.log('Generated User-Agent:', this.userAgent);
     } catch (error) {
       // Fallback User-Agent
-      this.userAgent = `ToshibaChatbot/1.0 (${Platform.OS} ${Platform.Version}) React-Native`;
+      this.userAgent = `ToshibaChatbot/1.16${Platform.OS} ${Platform.Version}) React-Native`;
       console.log('Fallback User-Agent:', this.userAgent);
     }
   }
@@ -301,8 +301,8 @@ async extendSession(accessToken: string): Promise<void> {
       console.log('User-Agent:', this.userAgent);
 
       // Use correct production endpoint (same as web app)
-      //const emailMfaUrl = 'https://tgcs.iopex.ai/api/email-mfa/send-login-code';
-      const emailMfaUrl = 'https://tgcs-testing.iopex.ai/api/email-mfa/send-login-code';
+      const emailMfaUrl = 'https://tgcs.iopex.ai/api/email-mfa/send-login-code';
+     //onst emailMfaUrl = 'https://tgcs-testing.iopex.ai/api/email-mfa/send-login-code';
       console.log('Email MFA URL (Production):', emailMfaUrl);
 
       const requestBody = {

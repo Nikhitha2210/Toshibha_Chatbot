@@ -203,6 +203,23 @@ const validateCurrentSession = async (): Promise<boolean> => {
         // Save them
         await AuthStorage.saveTokens(newTokens);
         
+        // ✅ CRITICAL FIX: Update biometric storage with new refresh token!
+const isBiometricEnabled = await biometricService.isBiometricEnabled();
+if (isBiometricEnabled) {
+  // Get user data to access email
+  const storedUserData = await AuthStorage.getUserData();
+  if (storedUserData?.email) {
+    const deviceFingerprint = await biometricService.getDeviceFingerprint();
+    await biometricService.enableBiometric(
+      newTokens.refresh_token,
+      newTokens.access_token,
+      deviceFingerprint,
+      storedUserData.email  // ✅ FIXED
+    );
+    console.log('✅ Biometric token updated with new refresh token');
+  }
+}
+        
         // Update state
         dispatch({
           type: 'TOKEN_REFRESHED',
@@ -299,9 +316,10 @@ const handleSessionExpired = async () => {
   await biometricService.enableBiometric(
     newTokens.refresh_token,
     newTokens.access_token,
-    deviceFingerprint
+    deviceFingerprint,
+    user.email  // ✅ FIXED: use 'user' not 'userData'
   );
-})(), // Update stored token
+})(),
             ]);
 
             // Update state with new session
@@ -481,7 +499,20 @@ const hasBiometric = await biometricService.isBiometricEnabled();
 if (hasBiometric) {
   console.log('🔐 Biometric is enabled, validating stored token...');
   
-  // Get stored refresh token
+  // ✅ STEP 1: Get stored biometric user email
+  const storedBiometricEmail = await biometricService.getBiometricUserEmail();
+  
+  if (!storedBiometricEmail) {
+    console.log('❌ No biometric user email found - security check failed');
+    await biometricService.disableBiometric();
+    await AuthStorage.clearAuthData();
+    dispatch({ type: 'SET_LOADING', payload: false });
+    return;
+  }
+  
+  console.log('📧 Biometric bound to user:', storedBiometricEmail);
+  
+  // ✅ STEP 2: Get stored refresh token
   const storedRefreshToken = await biometricService.getStoredToken();
   
   if (!storedRefreshToken) {
@@ -492,10 +523,50 @@ if (hasBiometric) {
     return;
   }
   
-  // Try to validate the refresh token SILENTLY
+  // ✅ STEP 3: Try to validate the refresh token SILENTLY
   try {
     console.log('🔄 Testing if refresh token is still valid...');
     const newTokens = await authApiClient.refreshToken(storedRefreshToken);
+    
+    // ✅ STEP 4: Get user details from token to verify identity
+    const tokenUser = await authApiClient.getUserDetails(newTokens.access_token);
+    
+    // ✅ STEP 5: CRITICAL - Verify token belongs to stored biometric user
+    if (tokenUser.email.toLowerCase() !== storedBiometricEmail.toLowerCase()) {
+      console.log('🚨 SECURITY ALERT: Token user mismatch!');
+      console.log('🔒 Stored biometric email:', storedBiometricEmail);
+      console.log('🔒 Token belongs to:', tokenUser.email);
+      console.log('🔒 Clearing biometric for security');
+      
+      await biometricService.disableBiometric();
+      await AuthStorage.clearAuthData();
+      
+      Alert.alert(
+        'Security Notice',
+        'Biometric data has been cleared for security. Please login with your password.',
+        [{ text: 'OK' }]
+      );
+      
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+    
+    console.log('✅ User email verified:', tokenUser.email);
+    
+    // ✅ STEP 6: CRITICAL - Check backend biometric flag
+    if (!tokenUser.biometric_mfa_enabled) {
+      console.log('🚨 Backend biometric is disabled for this user');
+      console.log('🔒 Clearing biometric data');
+      
+      await biometricService.disableBiometric();
+      await AuthStorage.clearAuthData();
+      
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+    
+    console.log('✅ Backend biometric flag verified');
+    
     const userData = await AuthStorage.getUserData();
     
     if (!userData) {
@@ -507,14 +578,15 @@ if (hasBiometric) {
       return;
     }
     
-    // Token is valid! Update storage and let LoginScreen show biometric prompt
+    // ✅ STEP 7: All checks passed - Token is valid! Update storage
     await AuthStorage.saveTokens(newTokens);
-const deviceFingerprint = await biometricService.getDeviceFingerprint();
-await biometricService.enableBiometric(
-  newTokens.refresh_token,
-  newTokens.access_token,
-  deviceFingerprint
-); // Update stored token    
+    const deviceFingerprint = await biometricService.getDeviceFingerprint();
+    await biometricService.enableBiometric(
+      newTokens.refresh_token,
+      newTokens.access_token,
+      deviceFingerprint,
+      userData.email
+    );
     console.log('✅ Refresh token is valid, biometric login available');
     dispatch({ type: 'SET_LOADING', payload: false });
     return;
@@ -617,7 +689,8 @@ if (wasBiometricEnabled) {
   await biometricService.enableBiometric(
     tokens.refresh_token,
     tokens.access_token,
-    deviceFingerprint
+    deviceFingerprint,
+    user.email  // ✅ ADD: user is available in this scope
   );
 }
 
@@ -661,12 +734,13 @@ if (navigationRef.current) {
 console.log('=== ✅ MOBILE LOGIN SUCCESS WITH USER-AGENT ===');
 
 // BIOMETRIC ENROLLMENT - Show AFTER navigation completes
+// BIOMETRIC ENROLLMENT - Show AFTER navigation completes
 setTimeout(async () => {
   try {
     const { available } = await biometricService.isBiometricAvailable();
     const isBiometricEnabled = await biometricService.isBiometricEnabled();
     
-    // ✅ NEW: Check backend status first
+    // ✅ Check backend status
     const backendBiometricEnabled = await checkBackendBiometricStatus(tokens.access_token);
     
     console.log('🔍 Biometric Check:', { 
@@ -675,14 +749,32 @@ setTimeout(async () => {
       backendBiometricEnabled 
     });
     
-    // ✅ UPDATED: Only show prompt if backend has biometric enabled
-    if (available && !isBiometricEnabled && backendBiometricEnabled) {
+    // ✅ CRITICAL FIX: Three different scenarios
+    
+    // SCENARIO 1: Backend enabled but local storage cleared (AsyncStorage wiped)
+    if (backendBiometricEnabled && !isBiometricEnabled) {
+      console.log('🔄 Re-syncing biometric with backend (storage was cleared)...');
+      
+      // Re-enable locally without showing prompt
+      const deviceFingerprint = await biometricService.getDeviceFingerprint();
+await biometricService.enableBiometric(
+  tokens.refresh_token,
+  tokens.access_token,
+  deviceFingerprint,
+  user.email  // ✅ ADD: user is available in this scope
+);
+      console.log('✅ Biometric re-synced - user can use fingerprint again');
+      return;
+    }
+    
+    // SCENARIO 2: First time setup - show enrollment prompt
+    if (available && !isBiometricEnabled && !backendBiometricEnabled) {
       // Wait for Home screen to be fully visible
       await new Promise(r => setTimeout(r, 1500));
       
-      console.log('📱 Showing biometric enrollment prompt...');
+      console.log('📱 Showing biometric enrollment prompt (first time)...');
       
-      // STEP 1: Show enrollment prompt and wait for user choice
+      // Show enrollment prompt
       const userWantsToEnable = await new Promise<boolean>((resolve) => {
         Alert.alert(
           'Enable Quick Login?',
@@ -712,26 +804,43 @@ setTimeout(async () => {
         return; // User declined
       }
       
-      // STEP 2: Trigger biometric enrollment (fingerprint scan)
+      // Trigger biometric enrollment (fingerprint scan)
       console.log('🔐 Starting biometric enrollment...');
       let enrollmentSuccess = false;
       let enrollmentError: string | null = null;
 
       try {
-        const deviceFingerprint = await biometricService.getDeviceFingerprint();
-        const success = await biometricService.enableBiometric(
-          tokens.refresh_token,
-          tokens.access_token,
-          deviceFingerprint
-        );
-        enrollmentSuccess = success;
-        
-        if (success) {
-          console.log('✅ Biometric enrollment successful');
-        } else {
-          console.log('❌ Biometric enrollment failed');
-          enrollmentError = 'Enrollment failed';
-        }
+const deviceFingerprint = await biometricService.getDeviceFingerprint();
+const success = await biometricService.enableBiometric(
+  tokens.refresh_token,
+  tokens.access_token,
+  deviceFingerprint,
+  user.email
+);
+enrollmentSuccess = success;
+
+if (success) {
+  console.log('✅ Biometric enrollment successful');
+  
+  // ✅ NEW: Refresh user data to get updated backend flag
+  try {
+    const updatedUser = await authApiClient.getUserDetails(tokens.access_token);
+    await AuthStorage.saveUserData(updatedUser);
+    
+    // Update state with new user data
+    dispatch({
+      type: 'UPDATE_USER',
+      payload: updatedUser
+    });
+    
+    console.log('✅ User data refreshed - biometric_mfa_enabled:', updatedUser.biometric_mfa_enabled);
+  } catch (error) {
+    console.log('⚠️ Could not refresh user data:', error);
+  }
+} else {
+  console.log('❌ Biometric enrollment failed');
+  enrollmentError = 'Enrollment failed';
+}
       } catch (enrollError) {
         console.log('❌ Biometric enrollment error:', enrollError);
         const errorMessage = enrollError instanceof Error ? enrollError.message : '';
@@ -745,11 +854,11 @@ setTimeout(async () => {
         enrollmentError = errorMessage || 'Unknown error';
       }
       
-      // STEP 3: Wait for fingerprint scanner to fully dismiss
+      // Wait for fingerprint scanner to fully dismiss
       console.log('⏳ Waiting for fingerprint scanner to dismiss...');
       await new Promise(r => setTimeout(r, 800));
       
-      // STEP 4: Show result Alert (only ONE at a time)
+      // Show result Alert
       if (enrollmentSuccess) {
         Alert.alert(
           'Success!',
@@ -765,13 +874,17 @@ setTimeout(async () => {
           { cancelable: false }
         );
       }
-    } else if (available && !backendBiometricEnabled) {
-      console.log('⚠️ Biometric disabled on backend - skipping enrollment prompt');
     }
+    
+    // SCENARIO 3: Already enabled both locally and backend - do nothing
+    if (isBiometricEnabled && backendBiometricEnabled) {
+      console.log('✅ Biometric already fully enabled - skipping prompt');
+    }
+    
   } catch (error) {
     console.log('⚠️ Biometric enrollment check failed:', error);
   }
-}, 1000); // Run after 1 second delay
+}, 1000);
 
 return; // Return immediately, don't wait for biometric
 
@@ -1110,10 +1223,16 @@ const enableBiometric = useCallback(async () => {
     const deviceFingerprint = await biometricService.getDeviceFingerprint();
     
     // Enable biometric with backend registration
+    const userData = await AuthStorage.getUserData();
+    if (!userData?.email) {
+      throw new Error('User email not available');
+    }
+
     const success = await biometricService.enableBiometric(
       state.tokens.refresh_token,
       state.tokens.access_token,
-      deviceFingerprint
+      deviceFingerprint,
+      userData.email
     );
     
     if (success) {
@@ -1152,18 +1271,48 @@ const loginWithBiometric = useCallback(async () => {
       newTokens = await authApiClient.refreshToken(refreshToken);
     }
 
-    const user = await authApiClient.getUserDetails(newTokens.access_token);
+   const user = await authApiClient.getUserDetails(newTokens.access_token);
 
-// ✅ Just log, don't block biometric login based on backend flag
-if (!user.biometric_mfa_enabled) {
-  console.log('ℹ️ Backend biometric flag is false');
-  console.log('ℹ️ Allowing login - device has valid local credential');
-  console.log('ℹ️ Backend flag only controls email OTP skip during password login');
-} else {
-  console.log('✅ Backend biometric flag is true');
+// ✅ CRITICAL: Verify user email matches stored biometric email
+const storedBiometricEmail = await biometricService.getBiometricUserEmail();
+
+if (storedBiometricEmail && user.email.toLowerCase() !== storedBiometricEmail.toLowerCase()) {
+  console.log('🚨 SECURITY ALERT: User mismatch during biometric login!');
+  console.log('🔒 Stored biometric email:', storedBiometricEmail);
+  console.log('🔒 Token belongs to:', user.email);
+  console.log('🔒 Clearing biometric and blocking login');
+  
+  await biometricService.disableBiometric();
+  
+  Alert.alert(
+    'Security Error',
+    'Biometric authentication failed. Please login with your password.',
+    [{ text: 'OK' }]
+  );
+  
+  throw new Error('User mismatch - security check failed');
 }
 
-console.log('✅ Biometric login proceeding with local device credential');
+console.log('✅ User email verified:', user.email);
+
+// ✅ CRITICAL: Check backend biometric flag
+if (!user.biometric_mfa_enabled) {
+  console.log('🚨 Backend biometric is disabled for this user');
+  console.log('🔒 Clearing local biometric data');
+  
+  await biometricService.disableBiometric();
+  
+  Alert.alert(
+    'Biometric Disabled',
+    'Biometric login is not enabled for your account. Please login with your password.',
+    [{ text: 'OK' }]
+  );
+  
+  throw new Error('Biometric not enabled on backend');
+}
+
+console.log('✅ Backend biometric flag verified');
+console.log('✅ Biometric login proceeding with verified credentials');
 
     // Continue with normal login flow...
     await Promise.all([
@@ -1174,7 +1323,8 @@ console.log('✅ Biometric login proceeding with local device credential');
         await biometricService.enableBiometric(
           newTokens.refresh_token,
           newTokens.access_token,
-          deviceFingerprint
+          deviceFingerprint,
+          user.email  // Add the missing user email parameter
         );
       })(),
     ]);

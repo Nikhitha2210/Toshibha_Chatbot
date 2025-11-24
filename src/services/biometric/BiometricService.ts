@@ -6,6 +6,7 @@ import { API_CONFIG } from '../../config/environment';
 const BIOMETRIC_STORAGE_KEY = 'biometric_refresh_token';
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
 const DEVICE_FINGERPRINT_KEY = 'device_fingerprint';
+const BIOMETRIC_USER_EMAIL_KEY = 'biometric_user_email'; // ✅ NEW
 
 class BiometricService {
   private rnBiometrics: ReactNativeBiometrics;
@@ -70,55 +71,58 @@ class BiometricService {
    * This tells your backend "this device is allowed to use biometric login"
    */
   private async registerDeviceWithBackend(
-  accessToken: string,
-  deviceFingerprint: string
-): Promise<boolean> {
-  try {
-    console.log('📱 Registering device with backend...');
-    
-    const deviceName = await DeviceInfo.getDeviceName();
-    const deviceModel = await DeviceInfo.getModel(); // ✅ Add this
-    
-    const response = await fetch(`${this.baseUrl}/api/biometric/register`, { // ✅ Changed URL
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-Tenant-ID': API_CONFIG.TENANT_ID,
-      },
-      body: JSON.stringify({
-        device_fingerprint: deviceFingerprint,
-        device_name: deviceName || 'Mobile Device',
-        device_model: deviceModel || 'Unknown',           // ✅ Add this
-        public_key: 'client-stored-key',                  // ✅ Add this (placeholder)
-      }),
-    });
-
-    if (response.ok) {
-      console.log('✅ Device registered with backend');
-      return true;
-    } else {
-      console.log('❌ Backend registration failed:', response.status);
-      const errorText = await response.text();
-      console.log('Error details:', errorText);
-      return false;
-    }
-  } catch (error) {
-    console.log('❌ Error registering device with backend:', error);
-    return true; // Don't fail enrollment if backend unavailable
-  }
-}
-  /**
-   * Enable biometric login with backend registration
-   * NOW TAKES 3 PARAMETERS instead of 1!
-   */
-  async enableBiometric(
-    refreshToken: string,
     accessToken: string,
     deviceFingerprint: string
   ): Promise<boolean> {
     try {
+      console.log('📱 Registering device with backend...');
+      
+      const deviceName = await DeviceInfo.getDeviceName();
+      const deviceModel = await DeviceInfo.getModel();
+      
+      const response = await fetch(`${this.baseUrl}/api/biometric/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'X-Tenant-ID': API_CONFIG.TENANT_ID,
+        },
+        body: JSON.stringify({
+          device_fingerprint: deviceFingerprint,
+          device_name: deviceName || 'Mobile Device',
+          device_model: deviceModel || 'Unknown',
+          public_key: 'client-stored-key',
+        }),
+      });
+
+      if (response.ok) {
+        console.log('✅ Device registered with backend');
+        return true;
+      } else {
+        console.log('❌ Backend registration failed:', response.status);
+        const errorText = await response.text();
+        console.log('Error details:', errorText);
+        return false;
+      }
+    } catch (error) {
+      console.log('❌ Error registering device with backend:', error);
+      return true; // Don't fail enrollment if backend unavailable
+    }
+  }
+
+  /**
+   * Enable biometric login with backend registration
+   * ✅ NOW TAKES 4 PARAMETERS (added userEmail)
+   */
+  async enableBiometric(
+    refreshToken: string,
+    accessToken: string,
+    deviceFingerprint: string,
+    userEmail: string  // ✅ NEW PARAMETER
+  ): Promise<boolean> {
+    try {
       console.log('🔐 Enabling biometric with backend integration...');
+      console.log('👤 Binding biometric to user:', userEmail);
       
       // Register device with backend
       const backendRegistered = await this.registerDeviceWithBackend(
@@ -136,10 +140,13 @@ class BiometricService {
       // Store device fingerprint
       await AsyncStorage.setItem(DEVICE_FINGERPRINT_KEY, deviceFingerprint);
       
+      // ✅ NEW: Store user email
+      await AsyncStorage.setItem(BIOMETRIC_USER_EMAIL_KEY, userEmail.toLowerCase());
+      
       // Mark biometric as enabled
       await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
       
-      console.log('✅ Biometric login enabled successfully');
+      console.log('✅ Biometric login enabled successfully for:', userEmail);
       return true;
     } catch (error) {
       console.log('❌ Error enabling biometric:', error);
@@ -149,7 +156,6 @@ class BiometricService {
 
   /**
    * Get stored device fingerprint
-   * NEW METHOD - needed for loginWithBiometric
    */
   async getDeviceFingerprint(): Promise<string> {
     try {
@@ -171,8 +177,23 @@ class BiometricService {
   }
 
   /**
+   * ✅ NEW: Get stored biometric user email
+   */
+  async getBiometricUserEmail(): Promise<string | null> {
+    try {
+      const email = await AsyncStorage.getItem(BIOMETRIC_USER_EMAIL_KEY);
+      if (email) {
+        console.log('📧 Stored biometric user email:', email);
+      }
+      return email;
+    } catch (error) {
+      console.log('Error getting biometric user email:', error);
+      return null;
+    }
+  }
+
+  /**
    * Authenticate with biometric and retrieve refresh token
-   * This is unchanged - still shows the fingerprint prompt
    */
   async authenticateAndGetToken(): Promise<string | null> {
     try {
@@ -206,7 +227,6 @@ class BiometricService {
   /**
    * Get stored token WITHOUT showing biometric prompt
    * Used for silent session recovery
-   * This is unchanged
    */
   async getStoredToken(): Promise<string | null> {
     try {
@@ -259,6 +279,7 @@ class BiometricService {
       await AsyncStorage.removeItem(BIOMETRIC_STORAGE_KEY);
       await AsyncStorage.removeItem(BIOMETRIC_ENABLED_KEY);
       await AsyncStorage.removeItem(DEVICE_FINGERPRINT_KEY);
+      await AsyncStorage.removeItem(BIOMETRIC_USER_EMAIL_KEY); // ✅ NEW
       
       console.log('✅ Biometric login disabled and tokens cleared');
     } catch (error) {
@@ -268,7 +289,6 @@ class BiometricService {
 
   /**
    * Check if we have a valid stored token (for debugging)
-   * This is unchanged
    */
   async hasStoredToken(): Promise<boolean> {
     try {

@@ -22,7 +22,7 @@ const logMobileAppStart = async () => {
         console.log('🚀 TOSHIBA MOBILE APP STARTED');
         console.log('📱 User-Agent:', headers['User-Agent']);
         console.log('📱 Platform: Android React Native');
-        console.log('📱 App Version: 1.14');
+        console.log('📱 App Version: 1.16');
     } catch (error) {
         console.log('📱 Mobile app started (fallback)');
     }
