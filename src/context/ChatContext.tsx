@@ -12,6 +12,7 @@ import {
 } from '../config/environment';
 import { getUserAgentHeaders, logUserAgent } from '../utils/userAgentUtils';
 import { AuthApiClient } from '../services/auth/AuthApiClient'; 
+import { useVideo } from './VideoContext';
 
 import DeviceInfo from 'react-native-device-info';
 const authApiClient = new AuthApiClient(API_CONFIG.AUTH_API_BASE_URL, API_CONFIG.TENANT_ID);
@@ -184,6 +185,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     const lastAutoSaveRef = useRef<number>(0);
 
     const authContext = useAuth();
+    const videoContext = useVideo(); 
 
     const safeApiCall = useCallback(async (apiCall: () => Promise<any>, fallbackError = 'API call failed') => {
         try {
@@ -960,6 +962,14 @@ const enhancedAutoSave = useCallback(async (sessionData: ChatSession) => {
 
 const extractSourcesFromText = useCallback((text: string): SourceReference[] => {
     try {
+
+        const hasVideo = /<video-details>/i.test(text);
+        if (hasVideo) {
+            console.log('📹 Message contains video content');
+            const videoDetails = videoContext.extractVideoDetails(text);
+            console.log('📹 Extracted video details:', videoDetails.length, 'videos');
+        }
+
         const sources: SourceReference[] = [];
 
         const fullSourcePattern = /(.*?)\s+page\s+(\d+(?:\s*[-,]\s*\d+)*)\s+\[aws_id:\s+(.*?)\]/gi;
@@ -1059,10 +1069,22 @@ const extractSourcesFromText = useCallback((text: string): SourceReference[] => 
         console.error('Error extracting sources:', error);
         return [];
     }
-}, []);
+}, [videoContext]);
 
 const cleanMessageText = useCallback((text: string, sources: SourceReference[]): string => {
     let cleanedText = text;
+
+        const videoTags: string[] = [];
+    const videoRegex = /<video-details>[\s\S]*?<\/video-details>/gi;
+    let videoMatch;
+    let videoIndex = 0;
+    
+    while ((videoMatch = videoRegex.exec(text)) !== null) {
+        const placeholder = `__VIDEO_PLACEHOLDER_${videoIndex}__`;
+        videoTags.push(videoMatch[0]);
+        cleanedText = cleanedText.replace(videoMatch[0], placeholder);
+        videoIndex++;
+    }
     
     sources.forEach((source) => {
         if (source.fullMatchText) {
@@ -1082,6 +1104,11 @@ const cleanMessageText = useCallback((text: string, sources: SourceReference[]):
         .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive line breaks
         .replace(/[ \t]+/g, ' ') // Normalize spaces but keep structure
         .trim();
+
+            videoTags.forEach((videoTag, index) => {
+        const placeholder = `__VIDEO_PLACEHOLDER_${index}__`;
+        cleanedText = cleanedText.replace(placeholder, videoTag);
+    });
     
     return cleanedText;
 }, []);
@@ -1361,6 +1388,11 @@ const sendMessage = useCallback(async (text: string) => {
         if (!isRequestCancelled) {
             const extractedSources = extractSourcesFromText(fullMessage);
             const cleanedAIMessage = cleanMessageText(fullMessage, extractedSources);
+
+            const hasVideo = /<video-details>/i.test(fullMessage);
+            if (hasVideo) {
+        console.log('📹 AI response contains video content');
+    }
             
             console.log(' Final AI message:', cleanedAIMessage.substring(0, 200) + '...');
             

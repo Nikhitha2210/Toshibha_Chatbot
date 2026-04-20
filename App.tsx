@@ -6,6 +6,7 @@ import {AuthProvider} from './src/context/AuthContext';
 import {PromptProvider} from './src/context/PromptContext';
 import {ThemeProvider} from './src/context/ThemeContext';
 import {ChatProvider} from './src/context/ChatContext';
+import {VideoProvider} from './src/context/VideoContext';
 
 import {checkMicrophonePermission} from './src/utils/checkMicrophonePermissions';
 import Navigation from './src/navigation';
@@ -34,13 +35,17 @@ const App = () => {
     <ErrorBoundary>
       <AuthProvider>
         <ThemeProvider>
+          <VideoProvider>
           <ChatProvider>
+             
             <PromptProvider>
               <GestureHandlerRootView style={styles.rootView}>
                 <Navigation />
               </GestureHandlerRootView>
             </PromptProvider>
+            
           </ChatProvider>
+          </VideoProvider>
         </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>

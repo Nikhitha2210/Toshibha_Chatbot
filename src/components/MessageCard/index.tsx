@@ -10,6 +10,8 @@ import SourceModal from '../Source';
 import { useThemeContext } from '../../context/ThemeContext';
 import { useChat } from '../../context/ChatContext';
 import SourcePills from '../SourcePills/SourcePills';
+import { useVideo } from '../../context/VideoContext';
+import { ChatMessageVideoElement } from '../Video/ChatMessageVideoElement';
 
 interface HighlightData {
     title: string;
@@ -230,12 +232,10 @@ const MessageRenderer = ({ text, theme }: { text: string; theme: 'light' | 'dark
 
 const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
     const isLikelyPartNumber = (value: string): boolean => {
-        // Must contain at least one digit AND one letter
         const hasDigit = /\d/.test(value);
         const hasLetter = /[A-Z]/i.test(value);
         if (!hasDigit || !hasLetter) return false;
         
-        // Exclude common words that might match the patterns
         const commonWords = [
             'POWER', 'SUPPLY', 'MODULE', 'SYSTEM', 'BOARD', 'CABLE', 'SWITCH', 
             'MOTOR', 'DRIVE', 'PANEL', 'LIGHT', 'VOLTAGE', 'CURRENT', 'SERIAL', 
@@ -253,14 +253,9 @@ const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | '
         ];
         
         if (commonWords.includes(value.toUpperCase())) return false;
-        
-        // If it's all letters, it's probably not a part number
         if (/^[A-Z]+$/i.test(value)) return false;
-        
-        // If it's all numbers, only allow if 8+ digits (from the 8-digit pattern)
         if (/^\d+$/.test(value) && value.length < 8) return false;
         
-        // Additional filtering: avoid common abbreviations
         const abbreviations = [
             'AC', 'DC', 'LED', 'LCD', 'USB', 'RAM', 'ROM', 'CPU', 'GPU',
             'MM', 'CM', 'KG', 'LB', 'OZ', 'PSI', 'RPM', 'CFM', 'BTU',
@@ -275,12 +270,11 @@ const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | '
     const extractPartNumbers = (text: string): string[] => {
         const partNumbers: string[] = [];
         
-        // Keep your original 4 patterns - they work for finding candidates
         const patterns = [
-            /\b[0-9][A-Z][A-Z0-9]{10}\b/g,     // 3AC type - 13 digit pattern
-            /\b\d{2}[A-Za-z]\d{4}\b/g,         // 80y1 type - 7 digit pattern 
-            /\b[A-Z0-9]{5,15}\b/g,             // Mixed alphanumeric like 28R3274 (keep this!)
-            /\b\d{8}\b/g,                      // Pure 8-digit numbers
+            /\b[0-9][A-Z][A-Z0-9]{10}\b/g,
+            /\b\d{2}[A-Za-z]\d{4}\b/g,
+            /\b[A-Z0-9]{5,15}\b/g,
+            /\b\d{8}\b/g,
         ];
 
         patterns.forEach(pattern => {
@@ -288,7 +282,6 @@ const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | '
             while ((match = pattern.exec(text)) !== null) {
                 const value = match[0];
                 
-                // Apply the improved filtering logic
                 if (!partNumbers.includes(value) && 
                     value.length >= 5 && 
                     value.length <= 15 &&
@@ -376,6 +369,28 @@ const PartNumberExtractor = ({ text, theme }: { text: string; theme: 'light' | '
     );
 };
 
+const MessageWithVideos = ({ text, theme }: { text: string; theme: 'light' | 'dark' }) => {
+    const videoContext = useVideo();
+    
+    // Split the message into text and video parts
+    const parts = videoContext.splitMessageByVideos(text);
+    
+    return (
+        <>
+            {parts.map((part, index) => {
+                if (part.type === 'video') {
+                    return <ChatMessageVideoElement key={`video-${index}`} xml={part.content} />;
+                }
+                return (
+                    <View key={`text-${index}`}>
+                        <MessageRenderer text={part.content} theme={theme} />
+                    </View>
+                );
+            })}
+        </>
+    );
+};
+
 const MessageCard: React.FC<MessageCardProps> = ({
     time,
     message,
@@ -391,6 +406,11 @@ const MessageCard: React.FC<MessageCardProps> = ({
         console.log('MessageCard Debug - Sources:', sources);
         console.log('MessageCard Debug - Is streaming:', isStreaming);
         console.log('MessageCard Debug - Message preview:', message.substring(0, 100) + '...');
+        
+        // Check for video content
+        if (/<video-details>/i.test(message)) {
+            console.log('📹 MessageCard detected video content in message');
+        }
         
         if (sources && sources.length > 0) {
             sources.forEach((source, index) => {
@@ -594,7 +614,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                         </Text>
                     ) : (
                         <>
-                            <MessageRenderer text={message} theme={theme} />
+                            <MessageWithVideos text={message} theme={theme} />
                             <PartNumberExtractor text={message} theme={theme} />
                         </>
                     )}
